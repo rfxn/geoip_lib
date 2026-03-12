@@ -197,7 +197,7 @@ teardown() {
 # geoip_expand_codes
 # ---------------------------------------------------------------------------
 
-@test "geoip_expand_codes: @AF returns 57+ comma-separated CCs" {
+@test "geoip_expand_codes: @AF returns 54+ comma-separated CCs" {
 	geoip_expand_codes "@AF"
 	# Count comma-separated entries
 	local _save_ifs="$IFS"

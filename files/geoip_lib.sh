@@ -25,8 +25,7 @@
 # No project-specific code — all behavior controlled via variables.
 
 # Source guard — safe for repeated sourcing
-# shellcheck disable=SC2154
-[[ -n "${_GEOIP_LIB_LOADED:-}" ]] && return 0 2>/dev/null
+[[ -n "${_GEOIP_LIB_LOADED:-}" ]] && return 0 2>/dev/null  # return outside function is non-fatal
 _GEOIP_LIB_LOADED=1
 
 # shellcheck disable=SC2034
@@ -191,4 +190,269 @@ geoip_validate_cc() {
 		fi
 	fi
 	return 1
+}
+
+# ===========================================================================
+# Download Layer — CIDR data download, staleness, and search
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Binary discovery at source time — allows env override for testing.
+# ---------------------------------------------------------------------------
+GEOIP_CURL_BIN="${GEOIP_CURL_BIN:-$(command -v curl 2>/dev/null || true)}"  # may be absent
+GEOIP_WGET_BIN="${GEOIP_WGET_BIN:-$(command -v wget 2>/dev/null || true)}"  # may be absent
+GEOIP_AWK_BIN="${GEOIP_AWK_BIN:-$(command -v awk 2>/dev/null || true)}"     # may be absent
+GEOIP_DL_TIMEOUT="${GEOIP_DL_TIMEOUT:-120}"
+
+# ---------------------------------------------------------------------------
+# _geoip_download_cmd — download URL to file via curl or wget.
+# Internal helper. Tries strict TLS first, falls back to insecure on failure.
+# Args: URL OUTPUT
+# Returns: 0 on success, 1 on failure (OUTPUT removed on failure)
+# ---------------------------------------------------------------------------
+_geoip_download_cmd() {
+	local url="$1" output="$2"
+	local rc=1
+
+	if [[ -n "$GEOIP_CURL_BIN" ]]; then
+		# Strict TLS first
+		"$GEOIP_CURL_BIN" -s --connect-timeout "$GEOIP_DL_TIMEOUT" \
+			--max-time "$GEOIP_DL_TIMEOUT" -o "$output" "$url" 2>/dev/null  # curl stderr noise suppressed
+		rc=$?
+		if [[ "$rc" -ne 0 ]]; then
+			# TLS fallback — needed for CentOS 6 with outdated CA bundles
+			"$GEOIP_CURL_BIN" -s --insecure --connect-timeout "$GEOIP_DL_TIMEOUT" \
+				--max-time "$GEOIP_DL_TIMEOUT" -o "$output" "$url" 2>/dev/null  # curl stderr noise suppressed
+			rc=$?
+		fi
+	elif [[ -n "$GEOIP_WGET_BIN" ]]; then
+		# Strict TLS first
+		"$GEOIP_WGET_BIN" -q --timeout="$GEOIP_DL_TIMEOUT" -O "$output" "$url" 2>/dev/null  # wget stderr noise suppressed
+		rc=$?
+		if [[ "$rc" -ne 0 ]]; then
+			# TLS fallback
+			"$GEOIP_WGET_BIN" -q --no-check-certificate \
+				--timeout="$GEOIP_DL_TIMEOUT" -O "$output" "$url" 2>/dev/null  # wget stderr noise suppressed
+			rc=$?
+		fi
+	else
+		echo "geoip_lib: neither curl nor wget available" >&2
+		return 1
+	fi
+
+	if [[ "$rc" -ne 0 ]]; then
+		rm -f "$output"
+		return 1
+	fi
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# _geoip_validate_cidr_file — validate downloaded CIDR file content.
+# Checks that file has at least one line matching expected CIDR format.
+# Args: FILE FAMILY (4 or 6)
+# Returns: 0 if valid, 1 if empty/garbage
+# ---------------------------------------------------------------------------
+_geoip_validate_cidr_file() {
+	local file="$1" family="$2"
+	local pat
+
+	[[ -f "$file" ]] || return 1
+	[[ -s "$file" ]] || return 1
+
+	if [[ "$family" == "6" ]]; then
+		pat='^[0-9a-fA-F:]*/[0-9]'
+	else
+		pat='^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]'
+	fi
+	grep -Eq "$pat" "$file"
+}
+
+# ---------------------------------------------------------------------------
+# _geoip_download_ipverse — download CIDR data from ipverse.net.
+# Args: CC FAMILY OUTPUT
+#   CC: 2-letter lowercase country code (ipverse uses lowercase)
+#   FAMILY: "4" or "6"
+#   OUTPUT: destination file path
+# Returns: 0 on success (valid CIDR), 1 on failure
+# ---------------------------------------------------------------------------
+_geoip_download_ipverse() {
+	local cc="$1" family="$2" output="$3"
+	local url tmpfile
+
+	if [[ "$family" == "6" ]]; then
+		url="https://ipverse.net/ipblocks/data/countries/${cc}.zone6"
+	else
+		url="https://ipverse.net/ipblocks/data/countries/${cc}.zone"
+	fi
+
+	tmpfile=$(mktemp "${output}.XXXXXX") || return 1
+
+	if ! _geoip_download_cmd "$url" "$tmpfile"; then
+		rm -f "$tmpfile"
+		return 1
+	fi
+
+	if ! _geoip_validate_cidr_file "$tmpfile" "$family"; then
+		rm -f "$tmpfile"
+		return 1
+	fi
+
+	mv -f "$tmpfile" "$output"
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# _geoip_download_ipdeny — download CIDR data from ipdeny.com.
+# Args: CC FAMILY OUTPUT
+#   CC: 2-letter lowercase country code (ipdeny uses lowercase)
+#   FAMILY: "4" or "6"
+#   OUTPUT: destination file path
+# Returns: 0 on success (valid CIDR), 1 on failure
+# ---------------------------------------------------------------------------
+_geoip_download_ipdeny() {
+	local cc="$1" family="$2" output="$3"
+	local url tmpfile
+
+	if [[ "$family" == "6" ]]; then
+		url="https://www.ipdeny.com/ipv6/ipaddresses/blocks/${cc}.zone"
+	else
+		url="https://www.ipdeny.com/ipblocks/data/countries/${cc}.zone"
+	fi
+
+	tmpfile=$(mktemp "${output}.XXXXXX") || return 1
+
+	if ! _geoip_download_cmd "$url" "$tmpfile"; then
+		rm -f "$tmpfile"
+		return 1
+	fi
+
+	if ! _geoip_validate_cidr_file "$tmpfile" "$family"; then
+		rm -f "$tmpfile"
+		return 1
+	fi
+
+	mv -f "$tmpfile" "$output"
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# geoip_download — download CIDR data for a country code.
+# Cascade: ipverse.net first, then ipdeny.com on failure.
+# Args: CC FAMILY OUTPUT [SOURCE]
+#   CC: 2-letter country code (uppercase accepted, lowercased internally)
+#   FAMILY: "4" or "6"
+#   OUTPUT: destination file path
+#   SOURCE: "ipverse", "ipdeny", or "auto" (default: "auto")
+# Returns: 0 on success, 1 on all sources failing
+# ---------------------------------------------------------------------------
+geoip_download() {
+	local cc="$1" family="$2" output="$3" source="${4:-auto}"
+	local lc_cc
+
+	# Validate arguments
+	[[ -n "$cc" ]] || { echo "geoip_download: CC required" >&2; return 1; }
+	[[ -n "$family" ]] || { echo "geoip_download: FAMILY required" >&2; return 1; }
+	[[ -n "$output" ]] || { echo "geoip_download: OUTPUT required" >&2; return 1; }
+	[[ "$family" == "4" || "$family" == "6" ]] || { echo "geoip_download: FAMILY must be 4 or 6" >&2; return 1; }
+
+	# Lowercase CC for URL construction (ipverse/ipdeny use lowercase)
+	lc_cc=$(echo "$cc" | tr '[:upper:]' '[:lower:]')
+
+	case "$source" in
+		ipverse)
+			_geoip_download_ipverse "$lc_cc" "$family" "$output"
+			return $?
+			;;
+		ipdeny)
+			_geoip_download_ipdeny "$lc_cc" "$family" "$output"
+			return $?
+			;;
+		auto)
+			# Cascade: ipverse first, ipdeny fallback
+			if _geoip_download_ipverse "$lc_cc" "$family" "$output"; then
+				return 0
+			fi
+			_geoip_download_ipdeny "$lc_cc" "$family" "$output"
+			return $?
+			;;
+		*)
+			echo "geoip_download: unknown source '$source' (use: auto, ipverse, ipdeny)" >&2
+			return 1
+			;;
+	esac
+}
+
+# ---------------------------------------------------------------------------
+# geoip_is_stale — check if CIDR data in a directory is stale.
+# Reads .last_update file (epoch timestamp) and compares to current time.
+# Args: DATA_DIR [MAX_AGE_DAYS]
+#   DATA_DIR: directory containing .last_update file
+#   MAX_AGE_DAYS: age threshold in days (default: 30)
+# Returns: 0 if stale or missing, 1 if fresh
+# ---------------------------------------------------------------------------
+geoip_is_stale() {
+	local data_dir="$1" max_age_days="${2:-30}"
+	local stamp_file="$data_dir/.last_update"
+	local now stamp age max_age_secs
+
+	[[ -f "$stamp_file" ]] || return 0
+
+	stamp=$(cat "$stamp_file")
+	# Validate stamp is a numeric epoch
+	local _epoch_pat='^[0-9]+$'
+	[[ "$stamp" =~ $_epoch_pat ]] || return 0
+
+	now=$(date +%s)
+	age=$(( now - stamp ))
+	max_age_secs=$(( max_age_days * 86400 ))
+
+	[[ "$age" -gt "$max_age_secs" ]]
+}
+
+# ---------------------------------------------------------------------------
+# geoip_mark_updated — write current epoch to .last_update in data directory.
+# Args: DATA_DIR
+# Returns: 0 on success, 1 on failure
+# ---------------------------------------------------------------------------
+geoip_mark_updated() {
+	local data_dir="$1"
+
+	[[ -n "$data_dir" ]] || return 1
+	[[ -d "$data_dir" ]] || return 1
+
+	date +%s > "$data_dir/.last_update"
+}
+
+# ---------------------------------------------------------------------------
+# geoip_cidr_search — search an IPv4 address across CIDR data files.
+# Portable AWK CIDR containment — no grepcidr required.
+# Extracted from APF geoip.apf:_geoip_cidr4_search().
+# Args: IP FILE [FILE ...]
+# Prints: matching file path on stdout
+# Returns: 0 on match, 1 on no match
+# ---------------------------------------------------------------------------
+geoip_cidr_search() {
+	local qip="$1"
+	shift
+
+	[[ -n "$qip" ]] || return 1
+	[[ $# -gt 0 ]] || return 1
+	[[ -n "$GEOIP_AWK_BIN" ]] || { echo "geoip_cidr_search: awk not available" >&2; return 1; }
+
+	"$GEOIP_AWK_BIN" -v qip="$qip" '
+	BEGIN {
+		split(qip, a, ".")
+		qint = (a[1]*16777216) + (a[2]*65536) + (a[3]*256) + a[4]
+		found = ""
+	}
+	/^[0-9]/ {
+		n = split($0, p, "[./]")
+		net = (p[1]*16777216) + (p[2]*65536) + (p[3]*256) + p[4]
+		bits = (n >= 5) ? int(p[5]+0) : 32
+		s = 2^(32-bits)
+		if (int(qint/s) == int(net/s)) { found = FILENAME; exit }
+	}
+	END { if (found != "") print found; exit(found == "") }
+	' "$@"
 }

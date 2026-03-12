@@ -1,5 +1,18 @@
 - v1.0.0 | Mar 12 2026:
 
+  [New] _geoip_download_cmd() — curl/wget download with TLS fallback for CentOS 6 compat
+  [New] _geoip_download_ipverse() — ipverse.net CIDR download with content validation
+  [New] _geoip_download_ipdeny() — ipdeny.com CIDR download with content validation
+  [New] geoip_download() — multi-vendor cascade (ipverse then ipdeny), per-CC CIDR download
+  [New] geoip_is_stale() — .last_update age check with configurable max_age_days
+  [New] geoip_mark_updated() — write epoch timestamp to .last_update
+  [New] geoip_cidr_search() — portable AWK IPv4 CIDR containment (from APF geoip.apf)
+  [New] _geoip_validate_cidr_file() — CIDR content validation to prevent cache poisoning
+  [New] Binary discovery at source time (GEOIP_CURL_BIN, GEOIP_WGET_BIN, GEOIP_AWK_BIN)
+  [New] GEOIP_DL_TIMEOUT configurable via env (default 120s)
+  [Fix] Remove dead shellcheck disable=SC2154 on source guard
+  [Fix] Add inline comment on 2>/dev/null at source guard per project convention
+  [Fix] Fix test title "57+ CCs" to match assertion threshold (>= 54)
   [New] Standalone geoip_lib repository extracted from APF geoip metadata functions
   [New] geoip_cc_name() — ISO 3166-1 alpha-2 to country name mapping (~180 countries)
   [New] geoip_cc_continent() — country code to continent shorthand (@AF/@AS/@EU/@NA/@SA/@OC)
