@@ -216,12 +216,12 @@ _geoip_download_cmd() {
 
 	if [[ -n "$GEOIP_CURL_BIN" ]]; then
 		# Strict TLS first
-		"$GEOIP_CURL_BIN" -s --connect-timeout "$GEOIP_DL_TIMEOUT" \
+		"$GEOIP_CURL_BIN" -sfL --connect-timeout "$GEOIP_DL_TIMEOUT" \
 			--max-time "$GEOIP_DL_TIMEOUT" -o "$output" "$url" 2>/dev/null  # curl stderr noise suppressed
 		rc=$?
 		if [[ "$rc" -ne 0 ]]; then
 			# TLS fallback — needed for CentOS 6 with outdated CA bundles
-			"$GEOIP_CURL_BIN" -s --insecure --connect-timeout "$GEOIP_DL_TIMEOUT" \
+			"$GEOIP_CURL_BIN" -sfL --insecure --connect-timeout "$GEOIP_DL_TIMEOUT" \
 				--max-time "$GEOIP_DL_TIMEOUT" -o "$output" "$url" 2>/dev/null  # curl stderr noise suppressed
 			rc=$?
 		fi
@@ -298,7 +298,7 @@ _geoip_download_ipverse() {
 		return 1
 	fi
 
-	mv -f "$tmpfile" "$output"
+	mv -f "$tmpfile" "$output" || { rm -f "$tmpfile"; return 1; }
 	return 0
 }
 
@@ -332,7 +332,7 @@ _geoip_download_ipdeny() {
 		return 1
 	fi
 
-	mv -f "$tmpfile" "$output"
+	mv -f "$tmpfile" "$output" || { rm -f "$tmpfile"; return 1; }
 	return 0
 }
 
@@ -352,6 +352,8 @@ geoip_download() {
 
 	# Validate arguments
 	[[ -n "$cc" ]] || { echo "geoip_download: CC required" >&2; return 1; }
+	local _cc_re='^[A-Za-z]{2}$'
+	[[ "$cc" =~ $_cc_re ]] || { echo "geoip_download: invalid CC format: $cc" >&2; return 1; }
 	[[ -n "$family" ]] || { echo "geoip_download: FAMILY required" >&2; return 1; }
 	[[ -n "$output" ]] || { echo "geoip_download: OUTPUT required" >&2; return 1; }
 	[[ "$family" == "4" || "$family" == "6" ]] || { echo "geoip_download: FAMILY must be 4 or 6" >&2; return 1; }

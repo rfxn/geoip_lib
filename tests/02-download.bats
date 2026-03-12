@@ -447,6 +447,64 @@ _mock_download_fail_then_succeed() {
 	grep -q '2001:' "$outfile"
 }
 
+@test "geoip_download: rejects CC with more than 2 characters" {
+	run geoip_download "USA" "4" "$TEST_TMPDIR/out"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid CC format"* ]]
+}
+
+@test "geoip_download: rejects CC with 1 character" {
+	run geoip_download "A" "4" "$TEST_TMPDIR/out"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid CC format"* ]]
+}
+
+@test "geoip_download: rejects CC with digits" {
+	run geoip_download "A1" "4" "$TEST_TMPDIR/out"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid CC format"* ]]
+}
+
+@test "geoip_download: rejects CC with path traversal" {
+	run geoip_download ".." "4" "$TEST_TMPDIR/out"
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"invalid CC format"* ]]
+}
+
+@test "geoip_download: accepts lowercase 2-letter CC" {
+	_mock_download_success "$MOCK_DATA/au.zone"
+	local outfile="$TEST_TMPDIR/lc_cc.zone"
+	run geoip_download "au" "4" "$outfile"
+	[[ "$status" -eq 0 ]]
+}
+
+@test "_geoip_download_ipverse: mv failure returns 1 and cleans tmpfile" {
+	_mock_download_success "$MOCK_DATA/au.zone"
+	# Override mv to simulate disk-full/permission failure
+	mv() { return 1; }
+	local outfile="$TEST_TMPDIR/mv_fail_ipverse.zone"
+	run _geoip_download_ipverse "au" "4" "$outfile"
+	unset -f mv
+	[[ "$status" -eq 1 ]]
+	# Verify no leftover temp files
+	local leftover
+	leftover=$(find "$TEST_TMPDIR" -name "mv_fail_ipverse.zone.*" 2>/dev/null | wc -l)
+	[[ "$leftover" -eq 0 ]]
+}
+
+@test "_geoip_download_ipdeny: mv failure returns 1 and cleans tmpfile" {
+	_mock_download_success "$MOCK_DATA/cn.zone"
+	# Override mv to simulate disk-full/permission failure
+	mv() { return 1; }
+	local outfile="$TEST_TMPDIR/mv_fail_ipdeny.zone"
+	run _geoip_download_ipdeny "cn" "4" "$outfile"
+	unset -f mv
+	[[ "$status" -eq 1 ]]
+	local leftover
+	leftover=$(find "$TEST_TMPDIR" -name "mv_fail_ipdeny.zone.*" 2>/dev/null | wc -l)
+	[[ "$leftover" -eq 0 ]]
+}
+
 # ---------------------------------------------------------------------------
 # geoip_is_stale
 # ---------------------------------------------------------------------------

@@ -1,5 +1,8 @@
 - v1.0.0 | Mar 12 2026:
 
+  [Fix] _geoip_download_ipverse/_geoip_download_ipdeny: handle mv failure — return 1 and clean up tmpfile
+  [Fix] geoip_download: validate CC format (2-letter alpha only) to prevent path traversal in URLs
+  [Fix] _geoip_download_cmd: add curl -f (fail on HTTP errors) and -L (follow redirects) flags
   [New] _geoip_download_cmd() — curl/wget download with TLS fallback for CentOS 6 compat
   [New] _geoip_download_ipverse() — ipverse.net CIDR download with content validation
   [New] _geoip_download_ipdeny() — ipdeny.com CIDR download with content validation
