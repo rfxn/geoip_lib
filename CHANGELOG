@@ -1,6 +1,15 @@
 geoip_lib CHANGELOG
 ===================
 
+- v1.0.1 | Mar 12 2026:
+
+  [New] geoip_all_cc() — enumerate all known country codes from continent variables
+  [New] geoip_ip_lookup() — IPv4 lookup in consolidated integer-range database (O(N), no caching)
+  [New] geoip_build_ipdb() — high-level builder: bulk download, CIDR-to-range conversion, sorted output
+  [New] _geoip_cidr4_to_ranges() — CIDR file to integer-range format (mawk-compatible)
+  [New] _geoip_download_ipdeny_bulk() — ipdeny.com all-zones.tar.gz bulk tarball download
+  [Fix] geoip_all_cc: avoid IFS contamination when caller has unset IFS
+
 - v1.0.0 | Mar 12 2026:
 
   [Fix] _geoip_download_ipverse/_geoip_download_ipdeny: handle mv failure — return 1 and clean up tmpfile

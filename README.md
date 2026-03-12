@@ -1,7 +1,7 @@
 # geoip_lib -- GeoIP Metadata Library for Bash
 
 [![CI](https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml/badge.svg)](https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/rfxn/geoip_lib)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/rfxn/geoip_lib)
 [![Bash](https://img.shields.io/badge/bash-4.1%2B-green.svg)](https://www.gnu.org/software/bash/)
 [![License](https://img.shields.io/badge/license-GPL%20v2-orange.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 
@@ -31,8 +31,12 @@ geoip_continent_name "@AS" # => "Asia"
 - **Bash 4.1+ compatible** -- no associative arrays, no bash 4.2+ features
 - **Source guard** -- safe for repeated sourcing
 - **Multi-vendor CIDR download** -- ipverse.net with ipdeny.com fallback, TLS retry for CentOS 6
+- **Bulk tarball download** -- ipdeny.com all-zones.tar.gz for batch country acquisition
 - **Staleness tracking** -- age-based freshness checks via `.last_update` timestamp
 - **CIDR search** -- portable AWK IPv4 containment check (mawk-safe)
+- **IP database builder** -- consolidated integer-range database from all country CIDRs
+- **IP-to-country lookup** -- fast integer-range search in consolidated database
+- **Country code enumeration** -- iterate all known CCs from continent variables
 
 ## Quick Start
 
@@ -188,6 +192,48 @@ Search for an IPv4 address across one or more CIDR zone files using portable AWK
 ```bash
 geoip_cidr_search "8.8.8.8" /var/lib/geoip/us.zone /var/lib/geoip/cn.zone
 # prints: /var/lib/geoip/us.zone
+```
+
+### geoip_all_cc()
+
+Emit all known ISO 3166-1 country codes, one per line.
+
+- **Output:** Prints uppercase 2-letter CCs to stdout (190-240 codes)
+- **Returns:** Always 0
+
+```bash
+geoip_all_cc | head -3
+# AO
+# BF
+# BI
+```
+
+### geoip_ip_lookup(IP, DB_FILE)
+
+Look up an IPv4 address in a consolidated integer-range database.
+
+- **Args:** `IP` -- IPv4 dotted-quad address; `DB_FILE` -- integer-range database file
+- **Output:** Prints 2-letter country code on match
+- **Returns:** 0 on match, 1 on no match or invalid input
+- **Complexity:** O(N) linear scan; high-frequency callers should cache results
+
+```bash
+geoip_ip_lookup "8.8.8.8" /var/lib/geoip/ipcountry.dat
+# prints: US
+```
+
+### geoip_build_ipdb(OUTPUT, [MIN_RANGES])
+
+Build a consolidated IPv4 integer-range database from all country CIDRs.
+Uses ipdeny.com bulk tarball when available, falls back to per-country cascade.
+
+- **Args:** `OUTPUT` -- destination file path; `MIN_RANGES` -- minimum range count (default: 1000)
+- **Sets:** `_GEOIP_BUILD_COUNT`, `_GEOIP_BUILD_FAIL`, `_GEOIP_BUILD_RANGES`
+- **Returns:** 0 on success, 1 on failure
+
+```bash
+geoip_build_ipdb "/var/lib/geoip/ipcountry.dat"
+echo "$_GEOIP_BUILD_COUNT countries, $_GEOIP_BUILD_RANGES ranges"
 ```
 
 ## Module Variables
