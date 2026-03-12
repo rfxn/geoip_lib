@@ -1,0 +1,12 @@
+- v1.0.0 | Mar 12 2026:
+
+  [New] Standalone geoip_lib repository extracted from APF geoip metadata functions
+  [New] geoip_cc_name() — ISO 3166-1 alpha-2 to country name mapping (~180 countries)
+  [New] geoip_cc_continent() — country code to continent shorthand (@AF/@AS/@EU/@NA/@SA/@OC)
+  [New] geoip_continent_name() — continent shorthand to full name (Africa, Asia, etc.)
+  [New] geoip_expand_codes() — continent shorthand to comma-separated CC list expansion
+  [New] geoip_validate_cc() — CC or @XX validation with type/codes output variables
+  [New] Module-level continent CC lists defined once, eliminating APF's duplication
+  [New] Eval-free continent lookup via case-based comma search (replaces APF's eval)
+  [New] Source guard for safe repeated sourcing
+  [New] BATS test suite with batsman CI (9-OS matrix)
