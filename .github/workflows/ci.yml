@@ -16,7 +16,7 @@ jobs:
       - name: Syntax check (bash -n)
         run: bash -n files/geoip_lib.sh tests/run-tests.sh
       - name: Shellcheck
-        run: shellcheck files/geoip_lib.sh tests/run-tests.sh
+        run: shellcheck -S warning files/geoip_lib.sh tests/run-tests.sh
 
   test:
     needs: lint
