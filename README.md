@@ -5,10 +5,10 @@
 [![Bash](https://img.shields.io/badge/bash-4.1%2B-green.svg)](https://www.gnu.org/software/bash/)
 [![License](https://img.shields.io/badge/license-GPL%20v2-orange.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 
-A shared Bash library for GeoIP metadata operations: country name resolution,
-continent mapping, continent-to-country expansion, and country code validation.
-Source it into your script and call the functions -- no dependencies, no
-subprocesses, no network access required for metadata operations.
+A shared Bash library for GeoIP operations: country name resolution, continent
+mapping, continent-to-country expansion, country code validation, and multi-vendor
+CIDR zone downloads with staleness tracking. Source it into your script and call
+the functions -- no external dependencies beyond curl or wget for downloads.
 
 Consumed by [BFD](https://github.com/rfxn/linux-brute-force-detection) and
 [APF](https://github.com/rfxn/linux-firewall) via source inclusion.
@@ -30,6 +30,9 @@ geoip_continent_name "@AS" # => "Asia"
 - **Eval-free** -- case-based comma search replaces eval-based variable lookup
 - **Bash 4.1+ compatible** -- no associative arrays, no bash 4.2+ features
 - **Source guard** -- safe for repeated sourcing
+- **Multi-vendor CIDR download** -- ipverse.net with ipdeny.com fallback, TLS retry for CentOS 6
+- **Staleness tracking** -- age-based freshness checks via `.last_update` timestamp
+- **CIDR search** -- portable AWK IPv4 containment check (mawk-safe)
 
 ## Quick Start
 
@@ -131,6 +134,62 @@ geoip_validate_cc "@EU"
 # _GEOIP_VCC_TYPE="continent", _GEOIP_VCC_CODES="AD,AL,AT,..."
 ```
 
+### geoip_download(CC, FAMILY, OUTPUT, [SOURCE])
+
+Download CIDR zone data for a country code from public sources.
+
+- **Args:**
+  - `CC` -- 2-letter country code
+  - `FAMILY` -- address family: `4` (IPv4) or `6` (IPv6)
+  - `OUTPUT` -- output file path for CIDR data
+  - `SOURCE` -- (optional) `"auto"` (default), `"ipverse"`, or `"ipdeny"`
+- **Returns:** 0 on success, 1 on failure (invalid args, download error, corrupt data)
+
+Auto mode cascades ipverse.net first, falls back to ipdeny.com. Downloaded data
+is validated against CIDR format before writing.
+
+```bash
+geoip_download "CN" "4" "/tmp/cn.zone"            # auto cascade
+geoip_download "US" "6" "/tmp/us6.zone" "ipverse"  # specific source
+```
+
+### geoip_is_stale(DATA_DIR, [MAX_AGE_DAYS])
+
+Check whether CIDR data in a directory needs refreshing.
+
+- **Args:** `DATA_DIR` -- directory containing `.last_update` file; `MAX_AGE_DAYS` -- threshold (default: 30)
+- **Returns:** 0 if stale or `.last_update` missing, 1 if fresh
+
+```bash
+if geoip_is_stale "/var/lib/geoip" 30; then
+    echo "Data is stale, refreshing..."
+fi
+```
+
+### geoip_mark_updated(DATA_DIR)
+
+Write current epoch timestamp to `.last_update` in the given directory.
+
+- **Args:** `DATA_DIR` -- directory to write `.last_update` into (must exist)
+- **Returns:** 0 on success, 1 on failure
+
+```bash
+geoip_mark_updated "/var/lib/geoip"
+```
+
+### geoip_cidr_search(IP, FILE [FILE ...])
+
+Search for an IPv4 address across one or more CIDR zone files using portable AWK.
+
+- **Args:** `IP` -- IPv4 address to look up; `FILE` -- one or more CIDR zone files
+- **Output:** Prints the matching file path to stdout
+- **Returns:** 0 on match, 1 on no match
+
+```bash
+geoip_cidr_search "8.8.8.8" /var/lib/geoip/us.zone /var/lib/geoip/cn.zone
+# prints: /var/lib/geoip/us.zone
+```
+
 ## Module Variables
 
 After sourcing, these read-only variables are available:
@@ -176,6 +235,7 @@ make -C tests test-all
 
 - Bash 4.1+ (CentOS 6 compatible)
 - No external dependencies for metadata functions
+- curl or wget required for download functions (auto-detected at source time)
 
 ## License
 
