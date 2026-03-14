@@ -1,7 +1,7 @@
 # geoip_lib -- GeoIP Metadata Library for Bash
 
 [![CI](https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml/badge.svg)](https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/rfxn/geoip_lib)
+[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](https://github.com/rfxn/geoip_lib)
 [![Bash](https://img.shields.io/badge/bash-4.1%2B-green.svg)](https://www.gnu.org/software/bash/)
 [![License](https://img.shields.io/badge/license-GPL%20v2-orange.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 
@@ -34,8 +34,10 @@ geoip_continent_name "@AS" # => "Asia"
 - **Bulk tarball download** -- ipdeny.com all-zones.tar.gz for batch country acquisition
 - **Staleness tracking** -- age-based freshness checks via `.last_update` timestamp
 - **CIDR search** -- portable AWK IPv4 containment check (mawk-safe)
-- **IP database builder** -- consolidated integer-range database from all country CIDRs
-- **IP-to-country lookup** -- fast integer-range search in consolidated database
+- **IPv4 database builder** -- consolidated integer-range database from all country CIDRs
+- **IPv4-to-country lookup** -- fast integer-range search in consolidated database
+- **IPv6 database builder** -- consolidated hex-range database from per-country CIDR downloads
+- **IPv6-to-country lookup** -- 32-char hex string comparison (no 128-bit arithmetic)
 - **Country code enumeration** -- iterate all known CCs from continent variables
 
 ## Quick Start
@@ -222,6 +224,25 @@ geoip_ip_lookup "8.8.8.8" /var/lib/geoip/ipcountry.dat
 # prints: US
 ```
 
+### geoip_ip6_lookup(IP, DB6_FILE)
+
+Look up an IPv6 address in a consolidated hex-range database.
+
+Normalizes the input IPv6 address to a 32-char lowercase hex string, then
+performs lexicographic comparison against the database ranges (equivalent to
+128-bit numeric comparison without integer overflow).
+
+- **Args:** `IP` -- IPv6 address (any valid abbreviation); `DB6_FILE` -- hex-range database file
+- **Output:** Prints 2-letter country code on match
+- **Returns:** 0 on match, 1 on no match or invalid input
+- **Rejects:** IPv4 addresses and dotted-quad mapped addresses (`::ffff:a.b.c.d`)
+- **Complexity:** O(N) linear scan; high-frequency callers should cache results
+
+```bash
+geoip_ip6_lookup "2001:db8::1" /var/lib/geoip/ipcountry6.dat
+# prints: JP
+```
+
 ### geoip_build_ipdb(OUTPUT, [MIN_RANGES])
 
 Build a consolidated IPv4 integer-range database from all country CIDRs.
@@ -234,6 +255,31 @@ Uses ipdeny.com bulk tarball when available, falls back to per-country cascade.
 ```bash
 geoip_build_ipdb "/var/lib/geoip/ipcountry.dat"
 echo "$_GEOIP_BUILD_COUNT countries, $_GEOIP_BUILD_RANGES ranges"
+```
+
+### geoip_build_ip6db(OUTPUT, [MIN_RANGES])
+
+Build a consolidated IPv6 hex-range database from all country CIDRs.
+Downloads IPv6 CIDR data per-country (~240 serial HTTP requests; no bulk
+IPv6 tarball available). Typical build time: 2-5 minutes.
+
+- **Args:** `OUTPUT` -- destination file path; `MIN_RANGES` -- minimum range count (default: 500)
+- **Sets:** `_GEOIP_BUILD6_COUNT`, `_GEOIP_BUILD6_FAIL`, `_GEOIP_BUILD6_RANGES`
+- **Returns:** 0 on success, 1 on failure
+
+**IPv6 database format:**
+```
+START_HEX END_HEX CC
+20010200000000000000000000000000 200102000007ffffffffffffffffffff JP
+20010db8000000000000000000000000 20010db80000ffffffffffffffffffff US
+```
+
+Three columns: 32-char lowercase hex start, 32-char lowercase hex end, 2-letter CC.
+Sorted lexicographically by START_HEX (`LC_ALL=C`).
+
+```bash
+geoip_build_ip6db "/var/lib/geoip/ipcountry6.dat"
+echo "$_GEOIP_BUILD6_COUNT countries, $_GEOIP_BUILD6_RANGES ranges"
 ```
 
 ## Module Variables

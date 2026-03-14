@@ -1,6 +1,19 @@
 geoip_lib CHANGELOG
 ===================
 
+- v1.0.2 | Mar 14 2026:
+
+  [New] _GEOIP_V6_AWK — shared mawk-safe awk v6hex() normalizes any IPv6
+        address to 32-char lowercase hex; rejects dotted-quad mapped addresses
+  [New] _geoip_cidr6_to_ranges() — convert IPv6 CIDR file to hex-range format
+        with non-nibble-aligned prefix masking; skips mapped IPv4 CIDRs
+  [New] geoip_ip6_lookup() — IPv6 address to country code lookup via 32-char
+        hex string comparison (no 128-bit arithmetic); rejects IPv4 and
+        dotted-quad mapped addresses
+  [New] geoip_build_ip6db() — build consolidated IPv6 hex-range database from
+        per-country cascade downloads (~240 serial requests, ~2-5 min);
+        LC_ALL=C sort for locale-safe hex ordering; default min_ranges=500
+
 - v1.0.1 | Mar 12 2026:
 
   [New] geoip_all_cc() — enumerate all known country codes from continent variables
