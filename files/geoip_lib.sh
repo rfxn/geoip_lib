@@ -479,6 +479,50 @@ geoip_cidr_search() {
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
+# _GEOIP_V6_AWK — shared AWK functions for IPv6 hex normalization.
+# Set once at source time; embedded in AWK programs via string concatenation.
+# v6hex(addr): normalizes any IPv6 address to 32-char lowercase hex string.
+# Rejects dotted-quad (::ffff:a.b.c.d) — returns empty string.
+# mawk-compatible: no gensub, no strftime; uses index()+integer math.
+# ---------------------------------------------------------------------------
+# shellcheck disable=SC2034
+_GEOIP_V6_AWK='
+function _v6_hexval(c,    p) {
+	p = index("0123456789abcdef", c)
+	if (p > 0) return p - 1
+	return 0
+}
+function _v6_hexchar(n) {
+	return substr("0123456789abcdef", n + 1, 1)
+}
+function v6hex(addr,    halves, lp, rp, nl, nr, full, zf, i, g, hex) {
+	if (index(addr, ".") > 0) return ""
+	addr = tolower(addr)
+	if (index(addr, "::") > 0) {
+		split(addr, halves, "::")
+		nl = split(halves[1], lp, ":")
+		if (halves[1] == "") nl = 0
+		nr = split(halves[2], rp, ":")
+		if (halves[2] == "") nr = 0
+		for (i = 1; i <= nl; i++) full[i] = lp[i]
+		zf = 8 - nl - nr
+		for (i = 1; i <= zf; i++) full[nl + i] = "0"
+		for (i = 1; i <= nr; i++) full[nl + zf + i] = rp[i]
+	} else {
+		if (split(addr, full, ":") != 8) return ""
+	}
+	hex = ""
+	for (i = 1; i <= 8; i++) {
+		g = full[i]
+		while (length(g) < 4) g = "0" g
+		hex = hex g
+	}
+	if (length(hex) != 32) return ""
+	return hex
+}
+'
+
+# ---------------------------------------------------------------------------
 # _geoip_cidr4_to_ranges — convert IPv4 CIDR file to integer-range format.
 # Input: CIDR_FILE CC
 #   CIDR_FILE: file with one IPv4 CIDR per line (comments/blanks skipped)
@@ -502,6 +546,62 @@ _geoip_cidr4_to_ranges() {
 	size = 2 ^ (32 - bits)
 	end = net + size - 1
 	printf "%d %d %s\n", net, end, cc
+}' "$cidr_file"
+}
+
+# ---------------------------------------------------------------------------
+# _geoip_cidr6_to_ranges — convert IPv6 CIDR file to hex-range format.
+# Input: CIDR_FILE CC
+#   CIDR_FILE: file with one IPv6 CIDR per line (comments/blanks skipped)
+#   CC: 2-letter country code tag for each range
+# Output: "START_HEX END_HEX CC" lines to stdout (unsorted).
+# START_HEX/END_HEX: 32-char lowercase hex strings (lexicographic = numeric).
+# Skips lines containing dots (mapped IPv4 CIDRs).
+# mawk-compatible: no gensub, no strftime. Uses _GEOIP_V6_AWK functions.
+# ---------------------------------------------------------------------------
+_geoip_cidr6_to_ranges() {
+	local cidr_file="$1" cc="$2"
+
+	[[ -n "$GEOIP_AWK_BIN" ]] || { echo "_geoip_cidr6_to_ranges: awk not available" >&2; return 1; }
+	[[ -f "$cidr_file" ]] || return 1
+
+	"$GEOIP_AWK_BIN" -v cc="$cc" "${_GEOIP_V6_AWK}"'
+/^[0-9a-fA-F:]/ {
+	if (index($0, ".") > 0) next
+	n = split($0, parts, "/")
+	if (n < 2) next
+	prefix_len = int(parts[2] + 0)
+	if (prefix_len < 0 || prefix_len > 128) next
+	hex = v6hex(parts[1])
+	if (hex == "") next
+
+	pos = int(prefix_len / 4)
+	rem = prefix_len % 4
+
+	if (pos > 0) {
+		start = substr(hex, 1, pos)
+		end_hex = substr(hex, 1, pos)
+	} else {
+		start = ""
+		end_hex = ""
+	}
+
+	if (rem > 0) {
+		boundary = substr(hex, pos + 1, 1)
+		nval = _v6_hexval(boundary)
+		mask_hi = 1
+		for (j = 1; j <= 4 - rem; j++) mask_hi = mask_hi * 2
+		start_nib = int(nval / mask_hi) * mask_hi
+		end_nib = start_nib + mask_hi - 1
+		start = start _v6_hexchar(start_nib)
+		end_hex = end_hex _v6_hexchar(end_nib)
+		pos = pos + 1
+	}
+
+	while (length(start) < 32) start = start "0"
+	while (length(end_hex) < 32) end_hex = end_hex "f"
+
+	printf "%s %s %s\n", start, end_hex, cc
 }' "$cidr_file"
 }
 
