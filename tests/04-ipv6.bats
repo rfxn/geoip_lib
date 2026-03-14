@@ -80,9 +80,92 @@ _test_v6hex() {
 	[[ -z "$output" ]]
 }
 
+@test "v6hex: rejects multiple :: separators (1::2::3)" {
+	run _test_v6hex "1::2::3"
+	[[ "$status" -eq 0 ]]
+	[[ -z "$output" ]]
+}
+
+@test "v6hex: rejects non-hex characters (2001:db8::xyz1)" {
+	run _test_v6hex "2001:db8::xyz1"
+	[[ "$status" -eq 0 ]]
+	[[ -z "$output" ]]
+}
+
+@test "v6hex: rejects too few groups without :: (7 groups)" {
+	run _test_v6hex "2001:db8:1:2:3:4:5"
+	[[ "$status" -eq 0 ]]
+	[[ -z "$output" ]]
+}
+
+@test "v6hex: rejects too many groups (9 groups)" {
+	run _test_v6hex "2001:db8:1:2:3:4:5:6:7"
+	[[ "$status" -eq 0 ]]
+	[[ -z "$output" ]]
+}
+
+@test "v6hex: rejects empty string" {
+	run _test_v6hex ""
+	[[ "$status" -eq 0 ]]
+	[[ -z "$output" ]]
+}
+
+@test "v6hex: rejects too many groups with :: (::1:2:3:4:5:6:7:8)" {
+	run _test_v6hex "::1:2:3:4:5:6:7:8"
+	[[ "$status" -eq 0 ]]
+	[[ -z "$output" ]]
+}
+
 # ---------------------------------------------------------------------------
 # _geoip_cidr6_to_ranges
 # ---------------------------------------------------------------------------
+
+@test "_geoip_cidr6_to_ranges: /1 first half of address space" {
+	printf '::/1\n' > "$TEST_TMPDIR/net1.zone6"
+	run _geoip_cidr6_to_ranges "$TEST_TMPDIR/net1.zone6" "XX"
+	[[ "$status" -eq 0 ]]
+	local start end_hex
+	start=$(echo "$output" | awk '{print $1}')
+	end_hex=$(echo "$output" | awk '{print $2}')
+	[[ "$start" == "00000000000000000000000000000000" ]]
+	[[ "${end_hex:0:1}" == "7" ]]
+	[[ "${end_hex:1}" == "fffffffffffffffffffffffffffffff" ]]
+}
+
+@test "_geoip_cidr6_to_ranges: /127 point-to-point link (2 addresses)" {
+	printf '2001:db8::2/127\n' > "$TEST_TMPDIR/net127.zone6"
+	run _geoip_cidr6_to_ranges "$TEST_TMPDIR/net127.zone6" "XX"
+	[[ "$status" -eq 0 ]]
+	local start end_hex
+	start=$(echo "$output" | awk '{print $1}')
+	end_hex=$(echo "$output" | awk '{print $2}')
+	# /127: last nibble boundary at pos=31 (rem=3), mask_hi=2
+	# addr nibble "2" -> binary 0010, top 3 bits = 001 -> start_nib=2, end_nib=3
+	[[ "${start:31:1}" == "2" ]]
+	[[ "${end_hex:31:1}" == "3" ]]
+	# First 31 chars should be identical
+	[[ "${start:0:31}" == "${end_hex:0:31}" ]]
+}
+
+@test "_geoip_cidr6_to_ranges: skips /129 invalid prefix" {
+	printf '2001:db8::/129\n2001:db8::/32\n' > "$TEST_TMPDIR/invalid_prefix.zone6"
+	run _geoip_cidr6_to_ranges "$TEST_TMPDIR/invalid_prefix.zone6" "XX"
+	[[ "$status" -eq 0 ]]
+	# Only /32 should produce output
+	local line_count
+	line_count=$(echo "$output" | wc -l)
+	[[ "$line_count" -eq 1 ]]
+}
+
+@test "_geoip_cidr6_to_ranges: skips bare address without /prefix" {
+	printf '2001:db8::1\n2001:db8::/32\n' > "$TEST_TMPDIR/bare_addr.zone6"
+	run _geoip_cidr6_to_ranges "$TEST_TMPDIR/bare_addr.zone6" "XX"
+	[[ "$status" -eq 0 ]]
+	# Only /32 should produce output
+	local line_count
+	line_count=$(echo "$output" | wc -l)
+	[[ "$line_count" -eq 1 ]]
+}
 
 @test "_geoip_cidr6_to_ranges: /128 single host — start equals end" {
 	printf '2001:db8::1/128\n' > "$TEST_TMPDIR/single.zone6"

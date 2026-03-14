@@ -495,15 +495,17 @@ function _v6_hexval(c,    p) {
 function _v6_hexchar(n) {
 	return substr("0123456789abcdef", n + 1, 1)
 }
-function v6hex(addr,    halves, lp, rp, nl, nr, full, zf, i, g, hex) {
+function v6hex(addr,    n, halves, lp, rp, nl, nr, full, zf, i, j, g, c, hex) {
 	if (index(addr, ".") > 0) return ""
 	addr = tolower(addr)
 	if (index(addr, "::") > 0) {
-		split(addr, halves, "::")
+		n = split(addr, halves, "::")
+		if (n != 2) return ""
 		nl = split(halves[1], lp, ":")
 		if (halves[1] == "") nl = 0
 		nr = split(halves[2], rp, ":")
 		if (halves[2] == "") nr = 0
+		if (nl + nr > 7) return ""
 		for (i = 1; i <= nl; i++) full[i] = lp[i]
 		zf = 8 - nl - nr
 		for (i = 1; i <= zf; i++) full[nl + i] = "0"
@@ -515,6 +517,11 @@ function v6hex(addr,    halves, lp, rp, nl, nr, full, zf, i, g, hex) {
 	for (i = 1; i <= 8; i++) {
 		g = full[i]
 		while (length(g) < 4) g = "0" g
+		if (length(g) > 4) return ""
+		for (j = 1; j <= 4; j++) {
+			c = substr(g, j, 1)
+			if (index("0123456789abcdef", c) == 0) return ""
+		}
 		hex = hex g
 	}
 	if (length(hex) != 32) return ""
