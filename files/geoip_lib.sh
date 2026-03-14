@@ -650,6 +650,54 @@ geoip_ip_lookup() {
 }
 
 # ---------------------------------------------------------------------------
+# geoip_ip6_lookup — look up IPv6 address in hex-range database.
+# Searches a "START_HEX END_HEX CC" database file for containment.
+# START_HEX/END_HEX: 32-char lowercase hex (output of geoip_build_ip6db).
+# Normalizes input via v6hex(), then lexicographic comparison on equal-length
+# hex strings (equivalent to numeric comparison, no 128-bit arithmetic).
+# Args: IP DB6_FILE
+#   IP: IPv6 address (any valid abbreviation)
+#   DB6_FILE: hex-range database file
+# Prints: 2-letter country code on match (to stdout)
+# Returns: 0 on match, 1 on no match or invalid input
+# Rejects IPv4 (no colon in input) and dotted-quad (::ffff:a.b.c.d).
+# No caching — consumers implement their own caching strategy.
+# Complexity: O(N) linear scan; high-frequency callers should cache results.
+# ---------------------------------------------------------------------------
+geoip_ip6_lookup() {
+	local ip="$1" db_file="$2"
+
+	[[ -n "$ip" ]] || return 1
+	# Must be IPv6 (contains colon)
+	[[ "$ip" == *:* ]] || return 1
+	# Reject dotted-quad mapped addresses — caller should use IPv4 lookup
+	[[ "$ip" != *"."* ]] || return 1
+	[[ -n "$db_file" ]] || return 1
+	[[ -f "$db_file" && -s "$db_file" ]] || return 1
+	[[ -n "$GEOIP_AWK_BIN" ]] || { echo "geoip_ip6_lookup: awk not available" >&2; return 1; }
+
+	local cc
+	cc=$("$GEOIP_AWK_BIN" -v ip="$ip" "${_GEOIP_V6_AWK}"'
+	BEGIN {
+		target = v6hex(ip)
+		if (target == "") exit
+	}
+	/^#/ { next }
+	{
+		if ($1 <= target && target <= $2) {
+			print $3
+			exit
+		}
+	}' "$db_file")
+
+	if [[ -n "$cc" ]]; then
+		echo "$cc"
+		return 0
+	fi
+	return 1
+}
+
+# ---------------------------------------------------------------------------
 # _geoip_download_ipdeny_bulk — download ipdeny.com all-zones tarball.
 # Extracts per-country IPv4 zone files to OUTPUT_DIR/{CC}.zone.
 # Validates filenames and CIDR content before writing.

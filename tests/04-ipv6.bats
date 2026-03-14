@@ -253,3 +253,136 @@ _test_v6hex() {
 		[[ "$end_hex" =~ $_hex_re ]]
 	done <<< "$output"
 }
+
+# ---------------------------------------------------------------------------
+# geoip_ip6_lookup
+# ---------------------------------------------------------------------------
+
+# Helper: create a hex-range fixture DB for IPv6 lookup tests
+_create_ip6_fixture_db() {
+	# Three ranges:
+	# 2001:db8::/32      = 20010db8{00..ff} → JP
+	# 2400:cb00::/32     = 2400cb00{00..ff} → US
+	# 2a00:1450::/32     = 2a001450{00..ff} → DE
+	cat > "$TEST_TMPDIR/test.ip6db" <<-'EOF'
+	20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+	2400cb00000000000000000000000000 2400cb00ffffffffffffffffffffffff US
+	2a001450000000000000000000000000 2a001450ffffffffffffffffffffffff DE
+	EOF
+}
+
+@test "geoip_ip6_lookup: finds IP in first range" {
+	_create_ip6_fixture_db
+	run geoip_ip6_lookup "2001:db8::1" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "JP" ]]
+}
+
+@test "geoip_ip6_lookup: finds IP in middle range" {
+	_create_ip6_fixture_db
+	run geoip_ip6_lookup "2400:cb00:2048:1::6814:155" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "US" ]]
+}
+
+@test "geoip_ip6_lookup: finds IP in last range" {
+	_create_ip6_fixture_db
+	run geoip_ip6_lookup "2a00:1450:4001::200e" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "DE" ]]
+}
+
+@test "geoip_ip6_lookup: first IP in range matches" {
+	_create_ip6_fixture_db
+	run geoip_ip6_lookup "2001:db8::" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "JP" ]]
+}
+
+@test "geoip_ip6_lookup: last IP in range matches" {
+	_create_ip6_fixture_db
+	run geoip_ip6_lookup "2001:db8:ffff:ffff:ffff:ffff:ffff:ffff" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "JP" ]]
+}
+
+@test "geoip_ip6_lookup: one past range end does not match" {
+	_create_ip6_fixture_db
+	# 2001:db9:: is just past 2001:db8::/32
+	run geoip_ip6_lookup "2001:db9::" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_ip6_lookup: no match returns 1" {
+	_create_ip6_fixture_db
+	run geoip_ip6_lookup "fe80::1" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 1 ]]
+	[[ -z "$output" ]]
+}
+
+@test "geoip_ip6_lookup: various abbreviations resolve correctly" {
+	_create_ip6_fixture_db
+	# All these are in 2001:db8::/32
+	run geoip_ip6_lookup "2001:0db8:0000:0000:0000:0000:0000:0001" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "JP" ]]
+	run geoip_ip6_lookup "2001:DB8::1" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "JP" ]]
+}
+
+@test "geoip_ip6_lookup: IPv4 input returns 1" {
+	_create_ip6_fixture_db
+	run geoip_ip6_lookup "192.0.2.1" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_ip6_lookup: dotted-quad mapped address returns 1" {
+	_create_ip6_fixture_db
+	run geoip_ip6_lookup "::ffff:192.168.1.1" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_ip6_lookup: empty IP returns 1" {
+	_create_ip6_fixture_db
+	run geoip_ip6_lookup "" "$TEST_TMPDIR/test.ip6db"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_ip6_lookup: missing DB file returns 1" {
+	run geoip_ip6_lookup "2001:db8::1" "$TEST_TMPDIR/nonexistent.ip6db"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_ip6_lookup: empty DB file returns 1" {
+	: > "$TEST_TMPDIR/empty.ip6db"
+	run geoip_ip6_lookup "2001:db8::1" "$TEST_TMPDIR/empty.ip6db"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_ip6_lookup: comment lines in DB skipped" {
+	cat > "$TEST_TMPDIR/commented.ip6db" <<-'EOF'
+	# IPv6 country database
+	20010db8000000000000000000000000 20010db8ffffffffffffffffffffffff JP
+	EOF
+	run geoip_ip6_lookup "2001:db8::1" "$TEST_TMPDIR/commented.ip6db"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "JP" ]]
+}
+
+@test "geoip_ip6_lookup: empty DB_FILE arg returns 1" {
+	run geoip_ip6_lookup "2001:db8::1" ""
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_ip6_lookup: roundtrip — _geoip_cidr6_to_ranges output fed to lookup" {
+	printf '2001:db8::/32\n2400:cb00::/32\n' > "$TEST_TMPDIR/roundtrip.zone6"
+	_geoip_cidr6_to_ranges "$TEST_TMPDIR/roundtrip.zone6" "JP" > "$TEST_TMPDIR/roundtrip.ip6db"
+	# Verify lookup works on converter output
+	run geoip_ip6_lookup "2001:db8:1234::1" "$TEST_TMPDIR/roundtrip.ip6db"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "JP" ]]
+	# Address outside both ranges
+	run geoip_ip6_lookup "fe80::1" "$TEST_TMPDIR/roundtrip.ip6db"
+	[[ "$status" -eq 1 ]]
+}
