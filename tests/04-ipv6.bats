@@ -386,3 +386,149 @@ _create_ip6_fixture_db() {
 	run geoip_ip6_lookup "fe80::1" "$TEST_TMPDIR/roundtrip.ip6db"
 	[[ "$status" -eq 1 ]]
 }
+
+# ---------------------------------------------------------------------------
+# geoip_build_ip6db — mocked end-to-end tests
+# ---------------------------------------------------------------------------
+
+@test "geoip_build_ip6db: produces sorted output from zone files" {
+	# Mock per-country download to provide 2 CCs
+	geoip_download() {
+		local cc="$1" _family="$2" output="$3"
+		case "$cc" in
+			US) printf '2400:cb00::/32\n' > "$output"; return 0 ;;
+			CN) printf '2001:db8::/32\n' > "$output"; return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+
+	local outfile="$TEST_TMPDIR/test_build6.ip6db"
+	run geoip_build_ip6db "$outfile" 1
+	[[ "$status" -eq 0 ]]
+	[[ -f "$outfile" ]]
+
+	# Verify output is sorted lexicographically by first field
+	local prev="" sorted=1
+	while read -r start rest; do
+		if [[ -n "$prev" ]] && [[ "$start" < "$prev" ]]; then
+			sorted=0
+			break
+		fi
+		prev="$start"
+	done < "$outfile"
+	[[ "$sorted" -eq 1 ]]
+}
+
+@test "geoip_build_ip6db: output is valid hex-range format" {
+	geoip_download() {
+		local cc="$1" _family="$2" output="$3"
+		case "$cc" in
+			US) printf '2400:cb00::/32\n' > "$output"; return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+
+	local outfile="$TEST_TMPDIR/format6.ip6db"
+	geoip_build_ip6db "$outfile" 1
+
+	local _hex_re='^[0-9a-f]{32}$'
+	while read -r start end_hex cc; do
+		[[ "$start" =~ $_hex_re ]]
+		[[ "$end_hex" =~ $_hex_re ]]
+		[[ ${#cc} -eq 2 ]]
+	done < "$outfile"
+}
+
+@test "geoip_build_ip6db: sets _GEOIP_BUILD6_COUNT and _GEOIP_BUILD6_RANGES" {
+	geoip_download() {
+		local cc="$1" _family="$2" output="$3"
+		case "$cc" in
+			US) printf '2400:cb00::/32\n' > "$output"; return 0 ;;
+			CN) printf '2001:db8::/32\n' > "$output"; return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+
+	local outfile="$TEST_TMPDIR/count_build6.ip6db"
+	geoip_build_ip6db "$outfile" 1
+	[[ "$_GEOIP_BUILD6_COUNT" -eq 2 ]]
+	[[ "$_GEOIP_BUILD6_RANGES" -eq 2 ]]
+	[[ "$_GEOIP_BUILD6_FAIL" -gt 0 ]]
+}
+
+@test "geoip_build_ip6db: aborts below min_ranges threshold" {
+	geoip_download() {
+		local cc="$1" _family="$2" output="$3"
+		case "$cc" in
+			US) printf '2400:cb00::/32\n' > "$output"; return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+
+	local outfile="$TEST_TMPDIR/min_build6.ip6db"
+	run geoip_build_ip6db "$outfile" 1000
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"only"*"ranges"* ]]
+}
+
+@test "geoip_build_ip6db: empty OUTPUT returns 1" {
+	run geoip_build_ip6db ""
+	[[ "$status" -eq 1 ]]
+	[[ "$output" == *"OUTPUT required"* ]]
+}
+
+@test "geoip_build_ip6db: output is usable by geoip_ip6_lookup" {
+	geoip_download() {
+		local cc="$1" _family="$2" output="$3"
+		case "$cc" in
+			US) printf '2400:cb00::/32\n' > "$output"; return 0 ;;
+			CN) printf '2001:db8::/32\n' > "$output"; return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+
+	local outfile="$TEST_TMPDIR/roundtrip6.ip6db"
+	geoip_build_ip6db "$outfile" 1
+
+	# Look up IPs in the built database
+	run geoip_ip6_lookup "2400:cb00:2048::1" "$outfile"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "US" ]]
+
+	run geoip_ip6_lookup "2001:db8::1" "$outfile"
+	[[ "$status" -eq 0 ]]
+	[[ "$output" == "CN" ]]
+
+	# IP not in any range
+	run geoip_ip6_lookup "fe80::1" "$outfile"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_build_ip6db: cleans up temp directory on success" {
+	geoip_download() {
+		local cc="$1" _family="$2" output="$3"
+		case "$cc" in
+			US) printf '2400:cb00::/32\n' > "$output"; return 0 ;;
+			*) return 1 ;;
+		esac
+	}
+
+	local outfile="$TEST_TMPDIR/cleanup6.ip6db"
+	geoip_build_ip6db "$outfile" 1
+
+	local leftover
+	leftover=$(find "$TEST_TMPDIR" -name "cleanup6.ip6db.build6-*" -type d 2>/dev/null | wc -l)
+	[[ "$leftover" -eq 0 ]]
+}
+
+@test "geoip_build_ip6db: cleans up temp directory on failure" {
+	geoip_download() { return 1; }
+
+	local outfile="$TEST_TMPDIR/fail_cleanup6.ip6db"
+	run geoip_build_ip6db "$outfile" 1000
+	[[ "$status" -eq 1 ]]
+
+	local leftover
+	leftover=$(find "$TEST_TMPDIR" -name "fail_cleanup6.ip6db.build6-*" -type d 2>/dev/null | wc -l)
+	[[ "$leftover" -eq 0 ]]
+}

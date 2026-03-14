@@ -832,3 +832,76 @@ geoip_build_ipdb() {
 	_GEOIP_BUILD_RANGES="$lines"
 	return 0
 }
+
+# ---------------------------------------------------------------------------
+# geoip_build_ip6db — build consolidated IPv6 hex-range database.
+# Downloads IPv6 CIDR data for all countries via per-country cascade
+# (no bulk IPv6 tarball available), converts to hex ranges, sorts
+# lexicographically, and writes to OUTPUT.
+# Expected: ~240 serial HTTP downloads, ~30K-60K ranges, ~2-4MB output.
+# Build time: ~2-5 minutes typical (120s timeout per download worst-case).
+# Args: OUTPUT [MIN_RANGES]
+#   OUTPUT: destination file path for the hex-range database
+#   MIN_RANGES: minimum expected range count (default: 500; abort if below)
+# Returns: 0 on success, 1 on failure
+# Sets: _GEOIP_BUILD6_COUNT  — countries successfully processed
+#       _GEOIP_BUILD6_FAIL   — countries that failed download
+#       _GEOIP_BUILD6_RANGES — total ranges in output
+# ---------------------------------------------------------------------------
+geoip_build_ip6db() {
+	local output="$1" min_ranges="${2:-500}"
+	local tmpdir count=0 fail_count=0
+
+	_GEOIP_BUILD6_COUNT=0
+	_GEOIP_BUILD6_FAIL=0
+	_GEOIP_BUILD6_RANGES=0
+
+	[[ -n "$output" ]] || { echo "geoip_build_ip6db: OUTPUT required" >&2; return 1; }
+
+	tmpdir=$(mktemp -d "${output}.build6-XXXXXX") || return 1
+	local zones_dir="$tmpdir/zones"
+	mkdir -p "$zones_dir"
+
+	# Per-country cascade (no bulk IPv6 tarball available)
+	local cc cidr_file
+	while IFS= read -r cc; do
+		cidr_file="$zones_dir/${cc}.zone6"
+		if geoip_download "$cc" "6" "$cidr_file"; then
+			count=$((count + 1))
+		else
+			fail_count=$((fail_count + 1))
+		fi
+	done < <(geoip_all_cc)
+
+	# Convert all zone files to hex ranges
+	local merged="$tmpdir/merged.dat"
+	: > "$merged"
+	local cc_base
+	for cidr_file in "$zones_dir"/*.zone6; do
+		[ -f "$cidr_file" ] || continue
+		cc_base=$(basename "$cidr_file" .zone6)
+		_geoip_cidr6_to_ranges "$cidr_file" "$cc_base" >> "$merged"
+	done
+
+	# Sort lexicographically by start hex (LC_ALL=C for locale-safe ordering)
+	LC_ALL=C sort -k1,1 "$merged" > "$tmpdir/sorted.dat"
+
+	local lines
+	lines=$(wc -l < "$tmpdir/sorted.dat")
+	if [[ "$lines" -lt "$min_ranges" ]]; then
+		echo "geoip_build_ip6db: only $lines ranges (minimum: $min_ranges)" >&2
+		rm -rf "$tmpdir"
+		return 1
+	fi
+
+	if ! mv -f "$tmpdir/sorted.dat" "$output"; then
+		rm -rf "$tmpdir"
+		return 1
+	fi
+	rm -rf "$tmpdir"
+
+	_GEOIP_BUILD6_COUNT="$count"
+	_GEOIP_BUILD6_FAIL="$fail_count"
+	_GEOIP_BUILD6_RANGES="$lines"
+	return 0
+}
