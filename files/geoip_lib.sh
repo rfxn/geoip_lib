@@ -171,6 +171,7 @@ geoip_expand_codes() {
 # Sets: _GEOIP_VCC_TYPE ("country" or "continent"), _GEOIP_VCC_CODES (CC list)
 # Accepts: XX (2-letter country code) or @XX (continent shorthand).
 # Returns 1 on invalid input.
+# Note: format validation only — unknown codes like "ZZ" pass as "country".
 # ---------------------------------------------------------------------------
 geoip_validate_cc() {
 	local input="$1"
@@ -256,7 +257,7 @@ _geoip_download_cmd() {
 	fi
 
 	if [[ "$rc" -ne 0 ]]; then
-		rm -f "$output"
+		command rm -f "$output"
 		return 1
 	fi
 	return 0
@@ -304,16 +305,16 @@ _geoip_download_ipverse() {
 	tmpfile=$(mktemp "${output}.XXXXXX") || return 1
 
 	if ! _geoip_download_cmd "$url" "$tmpfile"; then
-		rm -f "$tmpfile"
+		command rm -f "$tmpfile"
 		return 1
 	fi
 
 	if ! _geoip_validate_cidr_file "$tmpfile" "$family"; then
-		rm -f "$tmpfile"
+		command rm -f "$tmpfile"
 		return 1
 	fi
 
-	mv -f "$tmpfile" "$output" || { rm -f "$tmpfile"; return 1; }
+	command mv -f "$tmpfile" "$output" || { command rm -f "$tmpfile"; return 1; }
 	return 0
 }
 
@@ -338,16 +339,16 @@ _geoip_download_ipdeny() {
 	tmpfile=$(mktemp "${output}.XXXXXX") || return 1
 
 	if ! _geoip_download_cmd "$url" "$tmpfile"; then
-		rm -f "$tmpfile"
+		command rm -f "$tmpfile"
 		return 1
 	fi
 
 	if ! _geoip_validate_cidr_file "$tmpfile" "$family"; then
-		rm -f "$tmpfile"
+		command rm -f "$tmpfile"
 		return 1
 	fi
 
-	mv -f "$tmpfile" "$output" || { rm -f "$tmpfile"; return 1; }
+	command mv -f "$tmpfile" "$output" || { command rm -f "$tmpfile"; return 1; }
 	return 0
 }
 
@@ -415,7 +416,7 @@ geoip_is_stale() {
 
 	[[ -f "$stamp_file" ]] || return 0
 
-	stamp=$(cat "$stamp_file")
+	read -r stamp < "$stamp_file" || return 0
 	# Validate stamp is a numeric epoch
 	local _epoch_pat='^[0-9]+$'
 	[[ "$stamp" =~ $_epoch_pat ]] || return 0
@@ -718,29 +719,29 @@ _geoip_download_ipdeny_bulk() {
 	local tmp_tar tmp_dir count=0
 
 	[[ -n "$output_dir" ]] || return 1
-	mkdir -p "$output_dir" 2>/dev/null || return 1
+	mkdir -p "$output_dir" 2>/dev/null || return 1  # permission errors caught by || return
 
 	tmp_tar=$(mktemp "${output_dir}/.bulk-XXXXXX") || return 1
-	tmp_dir=$(mktemp -d "${output_dir}/.bulk-extract-XXXXXX") || { rm -f "$tmp_tar"; return 1; }
+	tmp_dir=$(mktemp -d "${output_dir}/.bulk-extract-XXXXXX") || { command rm -f "$tmp_tar"; return 1; }
 
 	if ! _geoip_download_cmd "$url" "$tmp_tar"; then
-		rm -f "$tmp_tar"
-		rm -rf "$tmp_dir"
+		command rm -f "$tmp_tar"
+		command rm -rf "$tmp_dir"
 		return 1
 	fi
 
-	if ! tar -xzf "$tmp_tar" -C "$tmp_dir" 2>/dev/null; then
-		rm -f "$tmp_tar"
-		rm -rf "$tmp_dir"
+	if ! tar -xzf "$tmp_tar" -C "$tmp_dir" 2>/dev/null; then  # tar errors handled by control flow
+		command rm -f "$tmp_tar"
+		command rm -rf "$tmp_dir"
 		return 1
 	fi
-	rm -f "$tmp_tar"
+	command rm -f "$tmp_tar"
 
 	local _cc_lre='^[a-z]{2}$'
 	local f cc_lower cc_upper
 	for f in "$tmp_dir"/*.zone; do
 		[ -f "$f" ] || continue
-		cc_lower=$(basename "$f" .zone)
+		cc_lower="${f##*/}"; cc_lower="${cc_lower%.zone}"
 		[[ "$cc_lower" =~ $_cc_lre ]] || continue
 		# Skip zz.zone — ipdeny's unassigned/reserved catch-all (/8 blocks
 		# that overlap real country allocations and poison lookup results)
@@ -749,11 +750,11 @@ _geoip_download_ipdeny_bulk() {
 			continue
 		fi
 		cc_upper=$(echo "$cc_lower" | tr '[:lower:]' '[:upper:]')
-		cp "$f" "$output_dir/${cc_upper}.zone"
+		command cp "$f" "$output_dir/${cc_upper}.zone"
 		count=$((count + 1))
 	done
 
-	rm -rf "$tmp_dir"
+	command rm -rf "$tmp_dir"
 	[[ "$count" -gt 0 ]]
 }
 
@@ -813,7 +814,7 @@ geoip_build_ipdb() {
 	local cc_base
 	for cidr_file in "$zones_dir"/*.zone; do
 		[ -f "$cidr_file" ] || continue
-		cc_base=$(basename "$cidr_file" .zone)
+		cc_base="${cidr_file##*/}"; cc_base="${cc_base%.zone}"
 		_geoip_cidr4_to_ranges "$cidr_file" "$cc_base" >> "$merged"
 	done
 
@@ -824,15 +825,15 @@ geoip_build_ipdb() {
 	lines=$(wc -l < "$tmpdir/sorted.dat")
 	if [[ "$lines" -lt "$min_ranges" ]]; then
 		echo "geoip_build_ipdb: only $lines ranges (minimum: $min_ranges)" >&2
-		rm -rf "$tmpdir"
+		command rm -rf "$tmpdir"
 		return 1
 	fi
 
-	if ! mv -f "$tmpdir/sorted.dat" "$output"; then
-		rm -rf "$tmpdir"
+	if ! command mv -f "$tmpdir/sorted.dat" "$output"; then
+		command rm -rf "$tmpdir"
 		return 1
 	fi
-	rm -rf "$tmpdir"
+	command rm -rf "$tmpdir"
 
 	_GEOIP_BUILD_COUNT="$count"
 	_GEOIP_BUILD_FAIL="$fail_count"
@@ -886,7 +887,7 @@ geoip_build_ip6db() {
 	local cc_base
 	for cidr_file in "$zones_dir"/*.zone6; do
 		[ -f "$cidr_file" ] || continue
-		cc_base=$(basename "$cidr_file" .zone6)
+		cc_base="${cidr_file##*/}"; cc_base="${cc_base%.zone6}"
 		_geoip_cidr6_to_ranges "$cidr_file" "$cc_base" >> "$merged"
 	done
 
@@ -897,15 +898,15 @@ geoip_build_ip6db() {
 	lines=$(wc -l < "$tmpdir/sorted.dat")
 	if [[ "$lines" -lt "$min_ranges" ]]; then
 		echo "geoip_build_ip6db: only $lines ranges (minimum: $min_ranges)" >&2
-		rm -rf "$tmpdir"
+		command rm -rf "$tmpdir"
 		return 1
 	fi
 
-	if ! mv -f "$tmpdir/sorted.dat" "$output"; then
-		rm -rf "$tmpdir"
+	if ! command mv -f "$tmpdir/sorted.dat" "$output"; then
+		command rm -rf "$tmpdir"
 		return 1
 	fi
-	rm -rf "$tmpdir"
+	command rm -rf "$tmpdir"
 
 	_GEOIP_BUILD6_COUNT="$count"
 	_GEOIP_BUILD6_FAIL="$fail_count"

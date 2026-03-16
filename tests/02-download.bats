@@ -480,11 +480,16 @@ _mock_download_fail_then_succeed() {
 
 @test "_geoip_download_ipverse: mv failure returns 1 and cleans tmpfile" {
 	_mock_download_success "$MOCK_DATA/au.zone"
-	# Override mv to simulate disk-full/permission failure
-	mv() { return 1; }
+	# Mock mv binary via PATH to simulate disk-full/permission failure
+	# (command mv bypasses shell functions, so we need a PATH-based mock)
+	printf '#!/bin/bash\nexit 1\n' > "$MOCK_BIN/mv"
+	chmod +x "$MOCK_BIN/mv"
+	local saved_path="$PATH"
+	PATH="$MOCK_BIN:$PATH"
 	local outfile="$TEST_TMPDIR/mv_fail_ipverse.zone"
 	run _geoip_download_ipverse "au" "4" "$outfile"
-	unset -f mv
+	PATH="$saved_path"
+	rm "$MOCK_BIN/mv"
 	[[ "$status" -eq 1 ]]
 	# Verify no leftover temp files
 	local leftover
@@ -494,11 +499,16 @@ _mock_download_fail_then_succeed() {
 
 @test "_geoip_download_ipdeny: mv failure returns 1 and cleans tmpfile" {
 	_mock_download_success "$MOCK_DATA/cn.zone"
-	# Override mv to simulate disk-full/permission failure
-	mv() { return 1; }
+	# Mock mv binary via PATH to simulate disk-full/permission failure
+	# (command mv bypasses shell functions, so we need a PATH-based mock)
+	printf '#!/bin/bash\nexit 1\n' > "$MOCK_BIN/mv"
+	chmod +x "$MOCK_BIN/mv"
+	local saved_path="$PATH"
+	PATH="$MOCK_BIN:$PATH"
 	local outfile="$TEST_TMPDIR/mv_fail_ipdeny.zone"
 	run _geoip_download_ipdeny "cn" "4" "$outfile"
-	unset -f mv
+	PATH="$saved_path"
+	rm "$MOCK_BIN/mv"
 	[[ "$status" -eq 1 ]]
 	local leftover
 	leftover=$(find "$TEST_TMPDIR" -name "mv_fail_ipdeny.zone.*" 2>/dev/null | wc -l)
