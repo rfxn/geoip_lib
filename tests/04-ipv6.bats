@@ -116,6 +116,12 @@ _test_v6hex() {
 	[[ -z "$output" ]]
 }
 
+@test "v6hex: rejects group with >4 hex characters" {
+	local result
+	result=$("$GEOIP_AWK_BIN" "${_GEOIP_V6_AWK}"'BEGIN { print v6hex("20010:db8::1") }')
+	[[ -z "$result" ]]
+}
+
 # ---------------------------------------------------------------------------
 # _geoip_cidr6_to_ranges
 # ---------------------------------------------------------------------------
@@ -512,7 +518,9 @@ _create_ip6_fixture_db() {
 	}
 
 	local outfile="$TEST_TMPDIR/format6.ip6db"
-	geoip_build_ip6db "$outfile" 1
+	run geoip_build_ip6db "$outfile" 1
+	[[ "$status" -eq 0 ]]
+	[[ -f "$outfile" ]]
 
 	local _hex_re='^[0-9a-f]{32}$'
 	while read -r start end_hex cc; do
@@ -520,6 +528,11 @@ _create_ip6_fixture_db() {
 		[[ "$end_hex" =~ $_hex_re ]]
 		[[ ${#cc} -eq 2 ]]
 	done < "$outfile"
+
+	# Verify at least one line was validated
+	local _lc
+	_lc=$(wc -l < "$outfile")
+	[[ "$_lc" -gt 0 ]]
 }
 
 @test "geoip_build_ip6db: sets _GEOIP_BUILD6_COUNT and _GEOIP_BUILD6_RANGES" {

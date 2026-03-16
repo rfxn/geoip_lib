@@ -77,14 +77,15 @@ _mock_download_fail_then_succeed() {
 # ---------------------------------------------------------------------------
 
 @test "binary discovery: GEOIP_CURL_BIN set from command -v" {
-	# Env override should take precedence
-	GEOIP_CURL_BIN="/mock/curl"
-	[[ "$GEOIP_CURL_BIN" == "/mock/curl" ]]
+	# Verify source-time discovery found curl (or env override took effect)
+	[[ -n "$GEOIP_CURL_BIN" ]]
+	# Verify it points to an executable
+	[[ -x "$GEOIP_CURL_BIN" ]]
 }
 
 @test "binary discovery: GEOIP_WGET_BIN set from command -v" {
-	GEOIP_WGET_BIN="/mock/wget"
-	[[ "$GEOIP_WGET_BIN" == "/mock/wget" ]]
+	[[ -n "$GEOIP_WGET_BIN" ]]
+	[[ -x "$GEOIP_WGET_BIN" ]]
 }
 
 @test "binary discovery: GEOIP_AWK_BIN set from command -v" {
