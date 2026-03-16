@@ -1,7 +1,7 @@
 # geoip_lib -- GeoIP Metadata Library for Bash
 
 [![CI](https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml/badge.svg)](https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg)](https://github.com/rfxn/geoip_lib)
+[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://github.com/rfxn/geoip_lib)
 [![Bash](https://img.shields.io/badge/bash-4.1%2B-green.svg)](https://www.gnu.org/software/bash/)
 [![License](https://img.shields.io/badge/license-GPL%20v2-orange.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 
@@ -295,6 +295,18 @@ After sourcing, these read-only variables are available:
 | `_GEOIP_CC_NA` | North America country codes (comma-separated) |
 | `_GEOIP_CC_SA` | South America country codes (comma-separated) |
 | `_GEOIP_CC_OC` | Oceania country codes (comma-separated) |
+
+### Environment Overrides
+
+Set before sourcing to override defaults:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GEOIP_CURL_BIN` | `command -v curl` | Path to curl binary |
+| `GEOIP_WGET_BIN` | `command -v wget` | Path to wget binary |
+| `GEOIP_AWK_BIN` | `command -v awk` | Path to awk binary |
+| `GEOIP_DL_TIMEOUT` | `120` | Download timeout in seconds |
+| `GEOIP_TLS_INSECURE` | `0` | Set to `"1"` to force insecure TLS fallback on any download failure (for legacy systems with non-standard CA issues) |
 
 ## Consumer Integration
 

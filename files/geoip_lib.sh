@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# geoip_lib.sh — GeoIP Metadata Library 1.0.2
+# geoip_lib.sh — GeoIP Metadata Library 1.0.3
 ###
 # Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 #                     Ryan MacDonald <ryan@rfxn.com>
@@ -29,7 +29,7 @@
 _GEOIP_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-GEOIP_LIB_VERSION="1.0.2"
+GEOIP_LIB_VERSION="1.0.3"
 
 # ---------------------------------------------------------------------------
 # Module-level continent CC lists (ISO 3166 assignments per UN geoscheme)
@@ -222,7 +222,8 @@ GEOIP_DL_TIMEOUT="${GEOIP_DL_TIMEOUT:-120}"
 
 # ---------------------------------------------------------------------------
 # _geoip_download_cmd — download URL to file via curl or wget.
-# Internal helper. Tries strict TLS first, falls back to insecure on failure.
+# Internal helper. Tries strict TLS first; falls back to insecure only on
+# TLS-specific errors (curl 35/51/60/77, wget 5) or when GEOIP_TLS_INSECURE=1.
 # Args: URL OUTPUT
 # Returns: 0 on success, 1 on failure (OUTPUT removed on failure)
 # ---------------------------------------------------------------------------
@@ -236,20 +237,26 @@ _geoip_download_cmd() {
 			--max-time "$GEOIP_DL_TIMEOUT" -o "$output" "$url" 2>/dev/null  # curl stderr noise suppressed
 		rc=$?
 		if [[ "$rc" -ne 0 ]]; then
-			# TLS fallback — needed for CentOS 6 with outdated CA bundles
-			"$GEOIP_CURL_BIN" -sfL --insecure --connect-timeout "$GEOIP_DL_TIMEOUT" \
-				--max-time "$GEOIP_DL_TIMEOUT" -o "$output" "$url" 2>/dev/null  # curl stderr noise suppressed
-			rc=$?
+			# TLS fallback — only on TLS errors (35=SSL connect, 51=peer cert,
+			# 60=CA bundle expired, 77=CA cert path/permissions)
+			# or when forced via GEOIP_TLS_INSECURE=1 for edge-case legacy systems
+			if [[ "$rc" -eq 35 || "$rc" -eq 51 || "$rc" -eq 60 || "$rc" -eq 77 || "${GEOIP_TLS_INSECURE:-0}" == "1" ]]; then
+				"$GEOIP_CURL_BIN" -sfL --insecure --connect-timeout "$GEOIP_DL_TIMEOUT" \
+					--max-time "$GEOIP_DL_TIMEOUT" -o "$output" "$url" 2>/dev/null  # curl stderr noise suppressed
+				rc=$?
+			fi
 		fi
 	elif [[ -n "$GEOIP_WGET_BIN" ]]; then
 		# Strict TLS first
 		"$GEOIP_WGET_BIN" -q --timeout="$GEOIP_DL_TIMEOUT" -O "$output" "$url" 2>/dev/null  # wget stderr noise suppressed
 		rc=$?
 		if [[ "$rc" -ne 0 ]]; then
-			# TLS fallback
-			"$GEOIP_WGET_BIN" -q --no-check-certificate \
-				--timeout="$GEOIP_DL_TIMEOUT" -O "$output" "$url" 2>/dev/null  # wget stderr noise suppressed
-			rc=$?
+			# TLS fallback — wget exit 5 is SSL verification failure
+			if [[ "$rc" -eq 5 || "${GEOIP_TLS_INSECURE:-0}" == "1" ]]; then
+				"$GEOIP_WGET_BIN" -q --no-check-certificate \
+					--timeout="$GEOIP_DL_TIMEOUT" -O "$output" "$url" 2>/dev/null  # wget stderr noise suppressed
+				rc=$?
+			fi
 		fi
 	else
 		echo "geoip_lib: neither curl nor wget available" >&2

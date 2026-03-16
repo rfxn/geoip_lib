@@ -206,7 +206,7 @@ _mock_download_fail_then_succeed() {
 		printf '1.0.0.0/24\n' > "$outpath"
 		exit 0
 	fi
-	exit 1
+	exit 60
 	ENDMOCK
 	chmod +x "$MOCK_BIN/curl"
 
@@ -218,6 +218,63 @@ _mock_download_fail_then_succeed() {
 	[[ "$status" -eq 0 ]]
 
 	GEOIP_CURL_BIN="$saved_curl"
+}
+
+@test "_geoip_download_cmd: non-TLS curl failure does not trigger insecure fallback" {
+	# Mock curl exits 7 (connection refused) — should NOT retry with --insecure
+	cat > "$MOCK_BIN/curl" <<-'ENDMOCK'
+	#!/bin/bash
+	for arg in "$@"; do
+		if [[ "$arg" == "--insecure" ]]; then
+			# Should never reach here for non-TLS failure
+			echo "INSECURE_REACHED" >&2
+			exit 0
+		fi
+	done
+	exit 7
+	ENDMOCK
+	chmod +x "$MOCK_BIN/curl"
+
+	local saved_curl="$GEOIP_CURL_BIN"
+	GEOIP_CURL_BIN="$MOCK_BIN/curl"
+
+	local outfile="$TEST_TMPDIR/no_tls_fallback"
+	run _geoip_download_cmd "https://example.com/test.zone" "$outfile"
+	[[ "$status" -eq 1 ]]
+
+	GEOIP_CURL_BIN="$saved_curl"
+}
+
+@test "_geoip_download_cmd: GEOIP_TLS_INSECURE=1 forces fallback on any failure" {
+	cat > "$MOCK_BIN/curl" <<-'ENDMOCK'
+	#!/bin/bash
+	outpath=""
+	has_insecure=0
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			--insecure) has_insecure=1 ;;
+			-o) shift; outpath="$1" ;;
+		esac
+		shift
+	done
+	if [[ "$has_insecure" -eq 1 ]]; then
+		printf '1.0.0.0/24\n' > "$outpath"
+		exit 0
+	fi
+	exit 7
+	ENDMOCK
+	chmod +x "$MOCK_BIN/curl"
+
+	local saved_curl="$GEOIP_CURL_BIN"
+	GEOIP_CURL_BIN="$MOCK_BIN/curl"
+	GEOIP_TLS_INSECURE=1
+
+	local outfile="$TEST_TMPDIR/force_insecure"
+	run _geoip_download_cmd "https://example.com/test.zone" "$outfile"
+	[[ "$status" -eq 0 ]]
+
+	GEOIP_CURL_BIN="$saved_curl"
+	unset GEOIP_TLS_INSECURE
 }
 
 @test "_geoip_download_cmd: removes output on failure" {

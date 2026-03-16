@@ -1,6 +1,22 @@
 geoip_lib CHANGELOG
 ===================
 
+- v1.0.3 | Mar 16 2026:
+
+  [Fix] All bare rm/mv/cp calls (23 sites) now use `command` prefix — bypasses
+        interactive aliases on systems where ~/.bashrc sets -i flags
+  [Fix] geoip_cidr_search: reject IPv6 input and non-IPv4 strings that previously
+        produced silent wrong results via AWK integer evaluation
+  [Fix] geoip_ip_lookup: reject non-numeric dotted-quad strings at bash level
+  [Change] _geoip_download_cmd: gate TLS insecure fallback on certificate-specific
+           exit codes only (curl 35/51/60/77, wget 5) instead of any failure;
+           prevents insecure retry on non-TLS errors (connection refused, timeout, DNS)
+  [New] GEOIP_TLS_INSECURE env var — set to "1" to force insecure TLS fallback on
+        any failure (escape hatch for edge-case legacy systems)
+  [Change] basename in loops replaced with parameter expansion; cat replaced
+           with read builtin in geoip_is_stale
+  [Change] geoip_validate_cc docstring clarifies format-only validation semantics
+
 - v1.0.2 | Mar 14 2026:
 
   [New] _GEOIP_V6_AWK — shared mawk-safe awk v6hex() normalizes any IPv6
