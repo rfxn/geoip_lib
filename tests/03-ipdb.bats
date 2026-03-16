@@ -278,6 +278,11 @@ _create_mock_tarball() {
 	[[ "$status" -eq 1 ]]
 }
 
+@test "geoip_ip_lookup: non-numeric IP returns 1" {
+	run geoip_ip_lookup "abc.def.ghi.jkl" "$MOCK_DATA/test.ipdb"
+	[[ "$status" -eq 1 ]]
+}
+
 @test "geoip_ip_lookup: empty IP returns 1" {
 	run geoip_ip_lookup "" "$MOCK_DATA/test.ipdb"
 	[[ "$status" -eq 1 ]]

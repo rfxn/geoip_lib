@@ -456,6 +456,11 @@ geoip_cidr_search() {
 
 	[[ -n "$qip" ]] || return 1
 	[[ $# -gt 0 ]] || return 1
+	# IPv6 not supported — caller should use geoip_ip6_lookup
+	[[ "$qip" != *:* ]] || return 1
+	# Validate IPv4 dotted-quad format
+	local _ip4_re='^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
+	[[ "$qip" =~ $_ip4_re ]] || return 1
 	[[ -n "$GEOIP_AWK_BIN" ]] || { echo "geoip_cidr_search: awk not available" >&2; return 1; }
 
 	"$GEOIP_AWK_BIN" -v qip="$qip" '
@@ -631,6 +636,9 @@ geoip_ip_lookup() {
 	[[ -n "$db_file" ]] || return 1
 	# IPv6 not supported
 	[[ "$ip" != *:* ]] || return 1
+	# Validate IPv4 dotted-quad format
+	local _ip4_re='^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
+	[[ "$ip" =~ $_ip4_re ]] || return 1
 	[[ -f "$db_file" ]] || return 1
 	[[ -s "$db_file" ]] || return 1
 	[[ -n "$GEOIP_AWK_BIN" ]] || { echo "geoip_ip_lookup: awk not available" >&2; return 1; }

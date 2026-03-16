@@ -707,3 +707,15 @@ _mock_download_fail_then_succeed() {
 	run geoip_cidr_search "1.0.0.1" "$TEST_TMPDIR/commented.zone"
 	[[ "$status" -eq 0 ]]
 }
+
+@test "geoip_cidr_search: non-IP string returns 1" {
+	printf '192.0.2.0/24\n' > "$TEST_TMPDIR/cs_reject.zone"
+	run geoip_cidr_search "hello" "$TEST_TMPDIR/cs_reject.zone"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_cidr_search: IPv6 input returns 1" {
+	printf '192.0.2.0/24\n' > "$TEST_TMPDIR/cs_v6reject.zone"
+	run geoip_cidr_search "2001:db8::1" "$TEST_TMPDIR/cs_v6reject.zone"
+	[[ "$status" -eq 1 ]]
+}
