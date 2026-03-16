@@ -1,4 +1,4 @@
-- v1.0.3 | Mar 16 2026:
+- v1.0.4 | Mar 16 2026:
 
   [Fix] All bare rm/mv/cp calls (23 sites) now use `command` prefix — bypasses
         interactive aliases on systems where ~/.bashrc sets -i flags

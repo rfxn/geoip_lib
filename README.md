@@ -1,7 +1,7 @@
 # geoip_lib -- GeoIP Metadata Library for Bash
 
 [![CI](https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml/badge.svg)](https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://github.com/rfxn/geoip_lib)
+[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)](https://github.com/rfxn/geoip_lib)
 [![Bash](https://img.shields.io/badge/bash-4.1%2B-green.svg)](https://www.gnu.org/software/bash/)
 [![License](https://img.shields.io/badge/license-GPL%20v2-orange.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)
 

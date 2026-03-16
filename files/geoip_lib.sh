@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# geoip_lib.sh — GeoIP Metadata Library 1.0.3
+# geoip_lib.sh — GeoIP Metadata Library 1.0.4
 ###
 # Copyright (C) 2026 R-fx Networks <proj@rfxn.com>
 #                     Ryan MacDonald <ryan@rfxn.com>
@@ -29,7 +29,7 @@
 _GEOIP_LIB_LOADED=1
 
 # shellcheck disable=SC2034
-GEOIP_LIB_VERSION="1.0.3"
+GEOIP_LIB_VERSION="1.0.4"
 
 # ---------------------------------------------------------------------------
 # Module-level continent CC lists (ISO 3166 assignments per UN geoscheme)
