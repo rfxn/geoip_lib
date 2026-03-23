@@ -1,3 +1,9 @@
+- v1.0.4 | Mar 23 2026:
+
+  [Change] README.md restructured for rfxn documentation convention (floor level):
+           centered flat-square badges, bold one-liner, copyright blockquote,
+           numbered sections (1-6), exit codes table, Support section
+
 - v1.0.4 | Mar 16 2026:
 
   [Fix] All bare rm/mv/cp calls (23 sites) now use `command` prefix — bypasses
