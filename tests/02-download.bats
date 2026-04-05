@@ -27,7 +27,7 @@ _mock_setup() {
 	# Create valid CIDR fixture files
 	printf '1.0.0.0/24\n1.0.4.0/22\n1.0.16.0/20\n' > "$MOCK_DATA/au.zone"
 	printf '223.0.0.0/15\n223.4.0.0/14\n223.64.0.0/11\n' > "$MOCK_DATA/cn.zone"
-	printf '2001:200::/23\n2001:240::/20\n' > "$MOCK_DATA/jp.zone6"
+	printf '2001:200::/23\n2001:240::/20\n2001:268::/32\n' > "$MOCK_DATA/jp.zone6"
 	# Empty and garbage fixtures
 	: > "$MOCK_DATA/empty.zone"
 	printf 'garbage line one\nmore garbage\n' > "$MOCK_DATA/garbage.zone"
@@ -372,6 +372,21 @@ _mock_download_fail_then_succeed() {
 	# IPv4 CIDRs don't match the IPv6 pattern
 	run _geoip_validate_cidr_file "$MOCK_DATA/au.zone" "6"
 	[[ "$status" -eq 1 ]]
+}
+
+@test "_geoip_validate_cidr_file: rejects file below GEOIP_MIN_CIDR_LINES" {
+	printf '1.0.0.0/24\n' > "$TEST_TMPDIR/single_cidr.zone"
+	# Default min is 3, file has 1 line — should fail
+	run _geoip_validate_cidr_file "$TEST_TMPDIR/single_cidr.zone" "4"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "_geoip_validate_cidr_file: respects GEOIP_MIN_CIDR_LINES override" {
+	printf '1.0.0.0/24\n' > "$TEST_TMPDIR/single_cidr2.zone"
+	GEOIP_MIN_CIDR_LINES=1
+	run _geoip_validate_cidr_file "$TEST_TMPDIR/single_cidr2.zone" "4"
+	unset GEOIP_MIN_CIDR_LINES
+	[[ "$status" -eq 0 ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -722,6 +737,22 @@ _mock_download_fail_then_succeed() {
 	geoip_mark_updated "$TEST_TMPDIR/roundtrip"
 	run geoip_is_stale "$TEST_TMPDIR/roundtrip" 30
 	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_mark_updated: removes symlink and writes real file" {
+	mkdir -p "$TEST_TMPDIR/symlink_test"
+	# Create a symlink pointing to a non-existent target
+	ln -sf /tmp/nonexistent "$TEST_TMPDIR/symlink_test/.last_update"
+	[[ -L "$TEST_TMPDIR/symlink_test/.last_update" ]]
+	geoip_mark_updated "$TEST_TMPDIR/symlink_test"
+	# Should now be a regular file, not a symlink
+	[[ ! -L "$TEST_TMPDIR/symlink_test/.last_update" ]]
+	[[ -f "$TEST_TMPDIR/symlink_test/.last_update" ]]
+	# Content should be a valid epoch
+	local content
+	content=$(cat "$TEST_TMPDIR/symlink_test/.last_update")
+	local _epoch_pat='^[0-9]+$'
+	[[ "$content" =~ $_epoch_pat ]]
 }
 
 # ---------------------------------------------------------------------------

@@ -284,13 +284,15 @@ _geoip_download_cmd() {
 
 # ---------------------------------------------------------------------------
 # _geoip_validate_cidr_file — validate downloaded CIDR file content.
-# Checks that file has at least one line matching expected CIDR format.
+# Checks that file has at least GEOIP_MIN_CIDR_LINES matching lines
+# in expected CIDR format. Default minimum is 3 to catch truncated or
+# near-empty files that happen to contain one valid-looking line.
 # Args: FILE FAMILY (4 or 6)
-# Returns: 0 if valid, 1 if empty/garbage
+# Returns: 0 if valid, 1 if empty/garbage/below minimum
 # ---------------------------------------------------------------------------
 _geoip_validate_cidr_file() {
 	local file="$1" family="$2"
-	local pat
+	local pat line_count
 
 	[[ -f "$file" ]] || return 1
 	[[ -s "$file" ]] || return 1
@@ -300,7 +302,8 @@ _geoip_validate_cidr_file() {
 	else
 		pat='^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/[0-9]'
 	fi
-	grep -Eq "$pat" "$file"
+	line_count=$(grep -cE "$pat" "$file" || true)  # grep -c exits 1 on 0 matches
+	[[ "$line_count" -ge "${GEOIP_MIN_CIDR_LINES:-3}" ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -454,11 +457,15 @@ geoip_is_stale() {
 # ---------------------------------------------------------------------------
 geoip_mark_updated() {
 	local data_dir="$1"
+	local _stamp_file
 
 	[[ -n "$data_dir" ]] || return 1
 	[[ -d "$data_dir" ]] || return 1
 
-	date +%s > "$data_dir/.last_update"
+	_stamp_file="$data_dir/.last_update"
+	# Remove symlink if present — prevent following attacker-controlled target
+	[[ ! -L "$_stamp_file" ]] || command rm -f "$_stamp_file"
+	date +%s > "$_stamp_file"
 }
 
 # ---------------------------------------------------------------------------
@@ -789,6 +796,9 @@ _geoip_download_ipdeny_bulk() {
 # sorts by start address, and writes to OUTPUT.
 # Uses ipdeny bulk tarball when available; falls back to per-country
 # cascade (ipverse → ipdeny) for any missing countries.
+# Locking: callers must hold their own lock if concurrent builds are possible.
+# The library does not implement internal locking — consumers (BFD, APF) use
+# their existing lock infrastructure (flock on their own lock files).
 # Args: OUTPUT [MIN_RANGES]
 #   OUTPUT: destination file path for the integer-range database
 #   MIN_RANGES: minimum expected range count (default: 1000; abort if below)
@@ -873,6 +883,7 @@ geoip_build_ipdb() {
 # lexicographically, and writes to OUTPUT.
 # Expected: ~240 serial HTTP downloads, ~30K-60K ranges, ~2-4MB output.
 # Build time: ~2-5 minutes typical (120s timeout per download worst-case).
+# Locking: callers must hold their own lock if concurrent builds are possible.
 # Args: OUTPUT [MIN_RANGES]
 #   OUTPUT: destination file path for the hex-range database
 #   MIN_RANGES: minimum expected range count (default: 500; abort if below)

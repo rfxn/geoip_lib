@@ -5,6 +5,10 @@
         GEOIP_TLS_INSECURE=1 remains as explicit opt-in for legacy systems
   [Fix] geoip_cidr_search, geoip_ip_lookup: reject IPv4 addresses with
         octets >255 (e.g., 999.0.0.1) via new _geoip_valid_ipv4() helper
+  [Change] _geoip_validate_cidr_file: require minimum 3 matching CIDR lines
+           (configurable via GEOIP_MIN_CIDR_LINES) — catches truncated downloads
+  [Fix] geoip_mark_updated: remove symlink before writing .last_update — prevents
+        following attacker-controlled symlink target
 
 - v1.0.4 | Mar 23 2026:
 

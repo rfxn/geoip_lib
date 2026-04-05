@@ -50,10 +50,11 @@ _create_mock_tarball() {
 	local tarball="$1"
 	shift
 	# remaining args: pairs of "cc content"
+	# Writes 3 lines per zone (GEOIP_MIN_CIDR_LINES default) by repeating content
 	local tar_src
 	tar_src=$(mktemp -d "$TEST_TMPDIR/tar_src.XXXXXX")
 	while [[ $# -ge 2 ]]; do
-		echo "$2" > "$tar_src/$1.zone"
+		printf '%s\n%s\n%s\n' "$2" "$2" "$2" > "$tar_src/$1.zone"
 		shift 2
 	done
 	tar -czf "$tarball" -C "$tar_src" .
@@ -368,9 +369,9 @@ _create_mock_tarball() {
 	local tar_file="$TEST_TMPDIR/mock_badnames.tar.gz"
 	local tar_src
 	tar_src=$(mktemp -d "$TEST_TMPDIR/tar_src.XXXXXX")
-	echo "198.51.100.0/24" > "$tar_src/us.zone"
-	echo "10.0.0.0/8" > "$tar_src/toolong.zone"
-	echo "10.0.0.0/8" > "$tar_src/1x.zone"
+	printf '198.51.100.0/24\n192.0.2.0/24\n203.0.113.0/24\n' > "$tar_src/us.zone"
+	printf '10.0.0.0/8\n10.0.0.0/8\n10.0.0.0/8\n' > "$tar_src/toolong.zone"
+	printf '10.0.0.0/8\n10.0.0.0/8\n10.0.0.0/8\n' > "$tar_src/1x.zone"
 	tar -czf "$tar_file" -C "$tar_src" .
 	rm -rf "$tar_src"
 
