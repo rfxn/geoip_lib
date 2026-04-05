@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml"><img src="https://github.com/rfxn/geoip_lib/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="CHANGELOG"><img src="https://img.shields.io/badge/version-1.0.4-blue.svg?style=flat-square" alt="Version"></a>
+  <a href="CHANGELOG"><img src="https://img.shields.io/badge/version-1.0.5-blue.svg?style=flat-square" alt="Version"></a>
   <a href="https://www.gnu.org/licenses/old-licenses/gpl-2.0.html"><img src="https://img.shields.io/badge/license-GPL_v2-green.svg?style=flat-square" alt="License: GPL v2"></a>
   <a href="https://www.gnu.org/software/bash/"><img src="https://img.shields.io/badge/bash-4.1%2B-green.svg?style=flat-square" alt="Bash 4.1+"></a>
 </p>
@@ -126,6 +126,7 @@ Configure geoip_lib by setting environment variables before sourcing.
 | `GEOIP_AWK_BIN` | `command -v awk` | Path to awk binary |
 | `GEOIP_DL_TIMEOUT` | `120` | Download timeout in seconds |
 | `GEOIP_TLS_INSECURE` | `0` | Set to `"1"` to allow insecure TLS fallback when strict TLS fails (for legacy systems with untrusted CA bundles). Without this, all TLS errors are fatal. |
+| `GEOIP_MIN_CIDR_LINES` | `3` | Minimum matching CIDR lines required for download validation. Increase for stricter checking or set to `1` for territories with very small allocations. |
 
 ### 3.2 Module Variables
 
