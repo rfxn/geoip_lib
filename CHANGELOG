@@ -14,6 +14,7 @@ geoip_lib CHANGELOG
         following attacker-controlled symlink target
   [Change] geoip_build_ipdb, geoip_build_ip6db: document locking contract in
            docstring — callers must hold their own lock for concurrent builds
+  [Change] CI: batsman workflow pin v1.0.3 → v1.4.0
 
 - v1.0.4 | Mar 23 2026:
 

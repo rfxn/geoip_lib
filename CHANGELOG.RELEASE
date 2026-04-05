@@ -9,6 +9,7 @@
            (configurable via GEOIP_MIN_CIDR_LINES) — catches truncated downloads
   [Fix] geoip_mark_updated: remove symlink before writing .last_update — prevents
         following attacker-controlled symlink target
+  [Change] CI: batsman workflow pin v1.0.3 → v1.4.0
 
 - v1.0.4 | Mar 23 2026:
 
