@@ -819,3 +819,63 @@ _mock_download_fail_then_succeed() {
 	run geoip_cidr_search "2001:db8::1" "$TEST_TMPDIR/cs_v6reject.zone"
 	[[ "$status" -eq 1 ]]
 }
+
+# ---------------------------------------------------------------------------
+# _geoip_valid_ipv4 — octet range validation
+# ---------------------------------------------------------------------------
+
+@test "_geoip_valid_ipv4: accepts 0.0.0.0" {
+	run _geoip_valid_ipv4 "0.0.0.0"
+	[[ "$status" -eq 0 ]]
+}
+
+@test "_geoip_valid_ipv4: accepts 255.255.255.255" {
+	run _geoip_valid_ipv4 "255.255.255.255"
+	[[ "$status" -eq 0 ]]
+}
+
+@test "_geoip_valid_ipv4: accepts 192.168.1.1" {
+	run _geoip_valid_ipv4 "192.168.1.1"
+	[[ "$status" -eq 0 ]]
+}
+
+@test "_geoip_valid_ipv4: accepts 1.0.0.1" {
+	run _geoip_valid_ipv4 "1.0.0.1"
+	[[ "$status" -eq 0 ]]
+}
+
+@test "_geoip_valid_ipv4: rejects 256.1.1.1" {
+	run _geoip_valid_ipv4 "256.1.1.1"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "_geoip_valid_ipv4: rejects 1.2.3.999" {
+	run _geoip_valid_ipv4 "1.2.3.999"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "_geoip_valid_ipv4: rejects 999.999.999.999" {
+	run _geoip_valid_ipv4 "999.999.999.999"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "_geoip_valid_ipv4: rejects 0.0.0.256" {
+	run _geoip_valid_ipv4 "0.0.0.256"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "_geoip_valid_ipv4: rejects empty string" {
+	run _geoip_valid_ipv4 ""
+	[[ "$status" -eq 1 ]]
+}
+
+@test "_geoip_valid_ipv4: rejects non-numeric" {
+	run _geoip_valid_ipv4 "abc.def.ghi.jkl"
+	[[ "$status" -eq 1 ]]
+}
+
+@test "geoip_cidr_search: rejects IP with octet >255" {
+	printf '192.0.2.0/24\n' > "$TEST_TMPDIR/cs_octet.zone"
+	run geoip_cidr_search "256.1.1.1" "$TEST_TMPDIR/cs_octet.zone"
+	[[ "$status" -eq 1 ]]
+}

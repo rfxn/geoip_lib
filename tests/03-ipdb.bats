@@ -314,6 +314,11 @@ _create_mock_tarball() {
 	[[ "$status" -eq 1 ]]
 }
 
+@test "geoip_ip_lookup: rejects IP with octet >255" {
+	run geoip_ip_lookup "999.0.0.1" "$TEST_TMPDIR/test_ipdb.dat"
+	[[ "$status" -eq 1 ]]
+}
+
 # ---------------------------------------------------------------------------
 # _geoip_download_ipdeny_bulk — mocked tarball tests
 # ---------------------------------------------------------------------------

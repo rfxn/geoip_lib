@@ -208,6 +208,23 @@ geoip_all_cc() {
 	done
 }
 
+# ---------------------------------------------------------------------------
+# _geoip_valid_ipv4 — validate IPv4 dotted-quad with octet range check.
+# Rejects octets >255 (e.g., 999.0.0.1) that a bare [0-9]+ regex would accept.
+# Args: IP
+# Returns: 0 if valid IPv4, 1 otherwise
+# ---------------------------------------------------------------------------
+_geoip_valid_ipv4() {
+	local ip="$1"
+	local _re='^([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)$'
+	[[ "$ip" =~ $_re ]] || return 1
+	local i
+	for i in 1 2 3 4; do
+		[ "${BASH_REMATCH[$i]}" -le 255 ] 2>/dev/null || return 1  # non-numeric or >255
+	done
+	return 0
+}
+
 # ===========================================================================
 # Download Layer — CIDR data download, staleness, and search
 # ===========================================================================
@@ -460,9 +477,8 @@ geoip_cidr_search() {
 	[[ $# -gt 0 ]] || return 1
 	# IPv6 not supported — caller should use geoip_ip6_lookup
 	[[ "$qip" != *:* ]] || return 1
-	# Validate IPv4 dotted-quad format
-	local _ip4_re='^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
-	[[ "$qip" =~ $_ip4_re ]] || return 1
+	# Validate IPv4 dotted-quad format (including octet range)
+	_geoip_valid_ipv4 "$qip" || return 1
 	[[ -n "$GEOIP_AWK_BIN" ]] || { echo "geoip_cidr_search: awk not available" >&2; return 1; }
 
 	"$GEOIP_AWK_BIN" -v qip="$qip" '
@@ -638,9 +654,8 @@ geoip_ip_lookup() {
 	[[ -n "$db_file" ]] || return 1
 	# IPv6 not supported
 	[[ "$ip" != *:* ]] || return 1
-	# Validate IPv4 dotted-quad format
-	local _ip4_re='^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'
-	[[ "$ip" =~ $_ip4_re ]] || return 1
+	# Validate IPv4 dotted-quad format (including octet range)
+	_geoip_valid_ipv4 "$ip" || return 1
 	[[ -f "$db_file" ]] || return 1
 	[[ -s "$db_file" ]] || return 1
 	[[ -n "$GEOIP_AWK_BIN" ]] || { echo "geoip_ip_lookup: awk not available" >&2; return 1; }

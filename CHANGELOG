@@ -6,6 +6,8 @@ geoip_lib CHANGELOG
   [Fix] _geoip_download_cmd: remove automatic TLS insecure fallback on curl
         exit codes 35/51/60/77 and wget exit code 5 — strict TLS by default;
         GEOIP_TLS_INSECURE=1 remains as explicit opt-in for legacy systems
+  [Fix] geoip_cidr_search, geoip_ip_lookup: reject IPv4 addresses with
+        octets >255 (e.g., 999.0.0.1) via new _geoip_valid_ipv4() helper
 
 - v1.0.4 | Mar 23 2026:
 
