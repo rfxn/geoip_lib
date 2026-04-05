@@ -1,6 +1,12 @@
 geoip_lib CHANGELOG
 ===================
 
+- v1.0.5 | Apr 05 2026:
+
+  [Fix] _geoip_download_cmd: remove automatic TLS insecure fallback on curl
+        exit codes 35/51/60/77 and wget exit code 5 — strict TLS by default;
+        GEOIP_TLS_INSECURE=1 remains as explicit opt-in for legacy systems
+
 - v1.0.4 | Mar 23 2026:
 
   [Change] README.md restructured for rfxn documentation convention (floor level):

@@ -125,7 +125,7 @@ Configure geoip_lib by setting environment variables before sourcing.
 | `GEOIP_WGET_BIN` | `command -v wget` | Path to wget binary |
 | `GEOIP_AWK_BIN` | `command -v awk` | Path to awk binary |
 | `GEOIP_DL_TIMEOUT` | `120` | Download timeout in seconds |
-| `GEOIP_TLS_INSECURE` | `0` | Set to `"1"` to force insecure TLS fallback on any download failure (for legacy systems with non-standard CA issues) |
+| `GEOIP_TLS_INSECURE` | `0` | Set to `"1"` to allow insecure TLS fallback when strict TLS fails (for legacy systems with untrusted CA bundles). Without this, all TLS errors are fatal. |
 
 ### 3.2 Module Variables
 

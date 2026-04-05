@@ -183,24 +183,41 @@ _mock_download_fail_then_succeed() {
 	GEOIP_WGET_BIN="$saved_wget"
 }
 
-@test "_geoip_download_cmd: TLS fallback on curl failure" {
-	# Create curl mock that fails on first try (strict TLS), succeeds on second (insecure)
+@test "_geoip_download_cmd: TLS error fails without GEOIP_TLS_INSECURE" {
+	# curl exit 60 (CA bundle expired) — strict mode should NOT auto-fallback
 	cat > "$MOCK_BIN/curl" <<-'ENDMOCK'
 	#!/bin/bash
-	has_insecure=0
-	outpath=""
 	for arg in "$@"; do
-		case "$arg" in
-			--insecure) has_insecure=1 ;;
-			-o) ;; # next arg is path
-			*) if [[ -n "$prev_was_o" ]]; then outpath="$arg"; fi ;;
-		esac
-		prev_was_o=""
-		[[ "$arg" == "-o" ]] && prev_was_o=1
+		if [[ "$arg" == "--insecure" ]]; then
+			echo "INSECURE_REACHED" >&2
+			exit 0
+		fi
 	done
-	# Find output path properly
+	exit 60
+	ENDMOCK
+	chmod +x "$MOCK_BIN/curl"
+
+	local saved_curl="$GEOIP_CURL_BIN"
+	GEOIP_CURL_BIN="$MOCK_BIN/curl"
+
+	local outfile="$TEST_TMPDIR/tls_strict_fail"
+	run _geoip_download_cmd "https://example.com/test.zone" "$outfile"
+	[[ "$status" -eq 1 ]]
+
+	GEOIP_CURL_BIN="$saved_curl"
+}
+
+@test "_geoip_download_cmd: TLS error succeeds with GEOIP_TLS_INSECURE=1" {
+	# curl exit 60 with opt-in — should fallback to insecure and succeed
+	cat > "$MOCK_BIN/curl" <<-'ENDMOCK'
+	#!/bin/bash
+	outpath=""
+	has_insecure=0
 	while [[ $# -gt 0 ]]; do
-		if [[ "$1" == "-o" ]]; then shift; outpath="$1"; fi
+		case "$1" in
+			--insecure) has_insecure=1 ;;
+			-o) shift; outpath="$1" ;;
+		esac
 		shift
 	done
 	if [[ "$has_insecure" -eq 1 ]]; then
@@ -213,10 +230,35 @@ _mock_download_fail_then_succeed() {
 
 	local saved_curl="$GEOIP_CURL_BIN"
 	GEOIP_CURL_BIN="$MOCK_BIN/curl"
+	GEOIP_TLS_INSECURE=1
 
-	local outfile="$TEST_TMPDIR/tls_fallback_out"
+	local outfile="$TEST_TMPDIR/tls_insecure_opt_in"
 	run _geoip_download_cmd "https://example.com/test.zone" "$outfile"
 	[[ "$status" -eq 0 ]]
+
+	GEOIP_CURL_BIN="$saved_curl"
+	unset GEOIP_TLS_INSECURE
+}
+
+@test "_geoip_download_cmd: cert mismatch (exit 51) fails without opt-in" {
+	cat > "$MOCK_BIN/curl" <<-'ENDMOCK'
+	#!/bin/bash
+	for arg in "$@"; do
+		if [[ "$arg" == "--insecure" ]]; then
+			echo "INSECURE_REACHED" >&2
+			exit 0
+		fi
+	done
+	exit 51
+	ENDMOCK
+	chmod +x "$MOCK_BIN/curl"
+
+	local saved_curl="$GEOIP_CURL_BIN"
+	GEOIP_CURL_BIN="$MOCK_BIN/curl"
+
+	local outfile="$TEST_TMPDIR/tls_cert_mismatch"
+	run _geoip_download_cmd "https://example.com/test.zone" "$outfile"
+	[[ "$status" -eq 1 ]]
 
 	GEOIP_CURL_BIN="$saved_curl"
 }
