@@ -142,6 +142,30 @@ teardown() {
 }
 
 # ---------------------------------------------------------------------------
+# geoip_cc_known
+# ---------------------------------------------------------------------------
+
+@test "geoip_cc_known: US returns 0 (known)" {
+	run geoip_cc_known "US"
+	[ "$status" -eq 0 ]
+}
+
+@test "geoip_cc_known: ZZ returns 1 (format-valid but unknown)" {
+	run geoip_cc_known "ZZ"
+	[ "$status" -eq 1 ]
+}
+
+@test "geoip_cc_known: empty string returns 1" {
+	run geoip_cc_known ""
+	[ "$status" -eq 1 ]
+}
+
+@test "geoip_cc_known: lowercase cc returns 1 (case-sensitive)" {
+	run geoip_cc_known "us"
+	[ "$status" -eq 1 ]
+}
+
+# ---------------------------------------------------------------------------
 # geoip_continent_name
 # ---------------------------------------------------------------------------
 

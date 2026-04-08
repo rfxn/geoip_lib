@@ -1,3 +1,14 @@
+- v1.0.6 | Apr 08 2026:
+
+  [Fix] Restore geoip_cc_known() — function was introduced in APF 2.0.2 work
+        (Mar 22) directly in the APF vendored copy (violating canonical-first
+        discipline) and subsequently deleted by the Apr 5 canonical→vendored
+        sync. Consumers calling the function saw "command not found" errors
+        and incorrect "Unknown country code" output for every input.
+  [New] Tests: tests/01-metadata.bats now covers geoip_cc_known (valid CC,
+        format-valid unknown, empty, lowercase). Closes gap that allowed
+        the regression to reach production.
+
 - v1.0.5 | Apr 05 2026:
 
   [Fix] _geoip_download_cmd: remove automatic TLS insecure fallback on curl
