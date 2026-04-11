@@ -1,6 +1,19 @@
 geoip_lib CHANGELOG
 ===================
 
+- v1.0.7 | Apr 11 2026:
+
+  [Change] files/geoip_lib.sh: removed 56 banner separator lines (# -----
+        and # ===== style) and 45 signature-restatement lines (# Args:,
+        # Returns:, # Prints:, # Sets:, # Input:, # Output:) from function
+        headers. Load-bearing rationale preserved intact — strict-TLS
+        default, GEOIP_TLS_INSECURE legacy escape hatch, curl/wget preference
+        logic, mawk-compatibility notes, symlink-safety note on
+        .last_update, locking contract. Zero functional change. One-line
+        headers per core profile comment-discipline rule.
+  [Change] GEOIP_LIB_VERSION: 1.0.6 → 1.0.7
+  [Change] File header version string: 1.0.5 (stale) → 1.0.7
+
 - v1.0.6 | Apr 08 2026:
 
   [Fix] Restore geoip_cc_known() — function was introduced in APF 2.0.2 work
